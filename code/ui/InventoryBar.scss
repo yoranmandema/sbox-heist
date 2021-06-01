@@ -6,7 +6,7 @@
 	font-family: Roboto;
 	opacity: 0;
 	transition: all 0.2s ease-out;
-
+	border-radius: 4px;
 
 	&.active
 	{
@@ -20,13 +20,14 @@ inventorycolumn
 {
 	margin-right: 5px;
 	mix-blend-mode: lighten;
-	color: #fc0;
+	color: rgb(255, 255, 255);
 	flex-direction: column;
 	align-items: flex-start; // align to the left, don't stretch
+	border-radius: 4px;
 
 	.slot-number
 	{
-		background-color: #fa02;
+		background-color: rgba(255, 255, 255, 0.133);
 		padding: 22px 15px 0px 10px;
 		font-size: 20px;
 		font-weight: bolder;
@@ -80,8 +81,8 @@ inventoryicon
 {
 	margin-top: 5px;
 	mix-blend-mode: lighten;
-	color: #fc0;
-	background-color: #fa04;
+	color: rgb(255, 255, 255);
+	background-color: rgba(255, 255, 255, 0.267);
 	font-size: 40px;
 	font-weight: lighter;
 	padding: 10px;
@@ -94,7 +95,7 @@ inventoryicon
 		width: 150px;
 		height: 150px;
 		background-size: 100%;
-		background-image-tint: #fa0;
+		background-image-tint: rgb(167, 167, 167);
 		position: absolute;
 	}
 
