@@ -10,10 +10,12 @@ partial class HeistViewModel : BaseViewModel
 	Vector3 acceleration;
 	float MouseScale => 1.5f;
 	float ReturnForce => 400f;
-	float Damping => 20f;
+	float Damping => 18f;
 	float AccelDamping => 0.2f;
 	float PivotForce => 1000f;
+	float VelocityScale => 10f;
 	float RotationScale => 2.5f;
+	float LookUpScale => 5f;
 
 	Vector3 Offset => new Vector3(2f,10,-3f);
 	float VelocityClamp => 3f;
@@ -23,16 +25,11 @@ partial class HeistViewModel : BaseViewModel
 	{
 		base.PostCameraSetup( ref camSetup );
 
-		// camSetup.ViewModelFieldOfView = camSetup.FieldOfView + (FieldOfView - 80);
-
 		AddCameraEffects( ref camSetup );
 	}
 
 	private void AddCameraEffects( ref CameraSetup camSetup )
 	{
-		//
-		// Bob up and down based on our walk movement
-		//
 		var speed = Owner.Velocity.Length.LerpInverse( 0, 320 );
 		var left = camSetup.Rotation.Left;
 		var up = camSetup.Rotation.Up;
@@ -64,9 +61,9 @@ partial class HeistViewModel : BaseViewModel
 		Rotation *= Rotation.FromRoll(-velocity.y * RotationScale);
 		Rotation *= Rotation.FromPitch(-velocity.z * RotationScale );
 
-		Position += forward * (velocity.x * 10f+ Offset.x);
-		Position += left * (velocity.y* 10f + Offset.y);
-		Position += up * (velocity.z* 10f + Offset.z);
+		Position += forward * (velocity.x * VelocityScale+ Offset.x);
+		Position += left * (velocity.y* VelocityScale + Offset.y);
+		Position += up * (velocity.z* VelocityScale + Offset.z + camSetup.Rotation.Forward.z * -LookUpScale) ;
 
 		Position += (Rotation.Forward - camSetup.Rotation.Forward) * -PivotForce;
 	}
