@@ -2,7 +2,7 @@
 {
 	position: absolute;
 	transform: translateX( -50% ) translateY( -0% );
-	mix-blend-mode: lighten;
+	// mix-blend-mode: lighten;
 	width: 1px;
 	height: 1px;
 
@@ -14,7 +14,7 @@
 
 	.el0
 	{
-		background-color: #ff0;
+		background-color: rgb(255, 255, 255);
 		border-radius: 1000px;
 		width: 6px;
 		height: 6px;
@@ -34,15 +34,15 @@
 			width: 200px;
 			height: 200px;
 			border: 6px solid #ff00;
-			border-left: 6px solid #ff0;
-			border-right: 6px solid #ff0;
+			border-left: 6px solid rgb(255, 255, 255);
+			border-right: 6px solid rgb(255, 255, 255);
 			transition: all 0.5s ease-out;
 		}
 
 		.el1
 		{
 			transition: all 0.5s ease-out;
-			background-color: #ff05;
+			background-color: rgba(134, 134, 134, 0.333);
 			border-radius: 1000px;
 			width: 10px;
 			height: 10px;
@@ -80,13 +80,13 @@
 
 	&.heist_pistol
 	{
-		opacity: 0.2;
+		opacity: 1;
 		transition: opacity 0.3s ease-out;
 
 		.el0, .el1, .el2, .el3
 		{
-			background-color: #ff0;
-			border-radius: 0;
+			background-color: rgb(255, 255, 255);
+			border: 1px solid #6e6e6e;
 			transition: all 0.5s ease-out;
 		}
 
@@ -118,12 +118,12 @@
 
 		.el2
 		{
-			bottom: 5px;
+			bottom: 8px;
 		}
 
 		.el3
 		{
-			top: 5px;
+			top: 8px;
 		}
 
 

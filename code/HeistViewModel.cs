@@ -15,19 +15,17 @@ partial class HeistViewModel : BaseViewModel
 	float PivotForce => 1000f;
 	float VelocityScale => 10f;
 	float RotationScale => 2.5f;
-	float LookUpPitchScale => 80f;
+	float LookUpPitchScale => 70f;
 	float LookUpSpeedScale => 80f;
 	float UpDownDamping => 10f;
-
 	float NoiseSpeed => 0.8f;
-
 	float NoiseScale => 20f;
 	
-
-
 	Vector3 WalkCycleOffsets => new Vector3(50f,20f,20f);
 	float ForwardBobbing => 3f;
+	float SideWalkOffset => 80f;
 	Vector3 Offset => new Vector3(2f,10,-5f);
+	Vector3 CrouchOffset => new Vector3(-10f,-50f,-0f);
 	float VelocityClamp => 3f;
 
 	float noiseZ = 0;
@@ -47,14 +45,17 @@ partial class HeistViewModel : BaseViewModel
 
 	private void AddCameraEffects( ref CameraSetup camSetup )
 	{
-		var speed = Owner.Velocity.Length.LerpInverse( 30, 320 );
+		var speed = Owner.Velocity.Length.LerpInverse( 0, 320 );
+		var bobSpeed = Owner.Velocity.Length.LerpInverse( -100, 320 );
 		var left = camSetup.Rotation.Left;
 		var up = camSetup.Rotation.Up;
 		var forward = camSetup.Rotation.Forward;
-
+		var owner = Owner as HeistPlayer;
+		var walkController = owner.Controller as WalkController;
+		
 		if ( Owner.GroundEntity != null )
 		{
-			walkBob += Time.Delta * 30.0f * speed;
+			walkBob += Time.Delta * 30.0f * bobSpeed;
 		}
 
 		if (Owner.Velocity.Length < 60) {
@@ -63,6 +64,10 @@ partial class HeistViewModel : BaseViewModel
 			walkBob += (step * 90 - walkBob) * 10f * Time.Delta;
 		}
 				
+		if (walkController.Duck.IsActive) {
+			acceleration += CrouchOffset * Time.Delta;
+		}
+
 		walkBob %= 360;
 
 		upDownOffset += speed * -LookUpSpeedScale * Time.Delta;
@@ -84,6 +89,8 @@ partial class HeistViewModel : BaseViewModel
 		// Apply left bobbing and up/down bobbing
 		acceleration += Vector3.Left * WalkCycle(0.5f, 2f) * speed * WalkCycleOffsets.y * Time.Delta;
 		acceleration += Vector3.Up * WalkCycle(0.5f, 2f, true) * speed * WalkCycleOffsets.z * Time.Delta;
+
+		acceleration += left.WithZ(0).Normal.Dot(Owner.Velocity.Normal) * Vector3.Left * speed * SideWalkOffset * Time.Delta;
 
 		velocity += acceleration * Time.Delta;
 

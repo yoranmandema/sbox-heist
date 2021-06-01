@@ -180,7 +180,7 @@ partial class HeistPlayer : Player
 
 	private void AddCameraEffects( ref CameraSetup setup )
 	{
-		return;
+		// return;
 
 		var speed = Velocity.Length.LerpInverse( 0, 320 );
 		var forwardspeed = Velocity.Normal.Dot( setup.Rotation.Forward );
