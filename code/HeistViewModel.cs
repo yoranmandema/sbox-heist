@@ -8,11 +8,15 @@ partial class HeistViewModel : BaseViewModel
 	Vector3 velocity;
 	Vector3 force; 
 	Vector3 acceleration;
-	float returnForce = 100f;
-	float damping = 5f;
-	float accelDamping = 1f;
+	float mouseScale = 1.5f;
+	float returnForce = 400f;
+	float damping = 20f;
+	float accelDamping = 0.2f;
+	float pivotForce = 1000f;
+	float rotationScale = 2.5f;
 
-	Vector3 offset = new Vector3(2f,0,10f);
+	Vector3 offset = new Vector3(2f,10,-3f);
+	float velocityClamp = 3f;
 
 
 	public override void PostCameraSetup( ref CameraSetup camSetup )
@@ -36,35 +40,45 @@ partial class HeistViewModel : BaseViewModel
 
 		if ( Owner.GroundEntity != null )
 		{
-			walkBob += Time.Delta * 15.0f * speed;
+			walkBob += Time.Delta * 30.0f * speed;
 		}
 
-		// acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.z * Time.Delta;
-		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.x * Time.Delta;
-		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.y * Time.Delta;
+		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * Time.Delta * mouseScale;
+		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * Time.Delta * mouseScale;
 		acceleration += -velocity * returnForce * Time.Delta;
 
-		acceleration += Vector3.Up * MathF.Sin( walkBob ) * speed * -0.1f;
-		acceleration += Vector3.Left * MathF.Sin( walkBob * 2f ) * speed * -0.1f;
-		acceleration += Vector3.Forward * MathF.Sin( walkBob * 1f) * speed * 0.1f;
+		acceleration += Vector3.Forward * WalkCycle(0.5f, 5f) * speed * 0.2f;
+		acceleration += Vector3.Left * WalkCycle(0.5f, 1f)* speed * -0.25f;
+		acceleration += Vector3.Up * WalkCycle(0.5f, 10f) * speed * 0.25f;
+
 
 		velocity += acceleration * Time.Delta;
+
+		// velocity *= new Vector3(0,1,0);
 
 		ApplyDamping(ref acceleration, accelDamping );
 
 		ApplyDamping( ref velocity, damping );
 
+		velocity = velocity.Normal * Math.Clamp(velocity.Length, 0, velocityClamp);
+
+		DebugOverlay.ScreenText(new Vector2(100,100), 0, Color.Red, $"{Math.Round(acceleration.x,2)} {Math.Round(acceleration.y,2)} {Math.Round(acceleration.z,2)}");
+		DebugOverlay.ScreenText(new Vector2(100,100), 1, Color.Red, $"{velocity.x} {velocity.y} {velocity.z}");
+
 		Rotation = Local.Pawn.EyeRot;
-		Rotation *= Rotation.FromYaw(velocity.x * 2f );
-		Rotation *= Rotation.FromRoll(-velocity.x * 2f);
-		Rotation *= Rotation.FromPitch(-velocity.y * 2f );
+		Rotation *= Rotation.FromYaw(velocity.y * rotationScale);
+		Rotation *= Rotation.FromRoll(-velocity.y * rotationScale);
+		Rotation *= Rotation.FromPitch(-velocity.z * rotationScale );
 
 		Position += forward * (velocity.x * 10f+ offset.x);
-		Position += left * (velocity.z* 10f + offset.z);
-		Position += up * (velocity.y* 10f + offset.y);
+		Position += left * (velocity.y* 10f + offset.y);
+		Position += up * (velocity.z* 10f + offset.z);
 
-		Position += (Rotation.Forward - camSetup.Rotation.Forward) * -1000f;
+		Position += (Rotation.Forward - camSetup.Rotation.Forward) * -pivotForce;
+	}
 
+	private float WalkCycle (float speed, float power) {
+		return 1f - MathF.Pow(MathF.Sin( walkBob * speed ), power);
 	}
 
 	public void ApplyImpulse (Vector3 impulse) {

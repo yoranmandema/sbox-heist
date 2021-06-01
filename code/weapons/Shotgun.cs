@@ -92,6 +92,8 @@ partial class Shotgun : BaseHeistWeapon
 			new Sandbox.ScreenShake.Perlin(1.0f, 1.5f, 2.0f);
 		}
 
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -50.5f + Vector3.Left * -1.5f + Vector3.Up * -10f);
+
 		CrosshairPanel?.OnEvent( "fire" );
 	}
 
@@ -104,7 +106,7 @@ partial class Shotgun : BaseHeistWeapon
 
 		ViewModelEntity?.SetAnimBool( "fire_double", true );
 			
-		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * 3f + Vector3.Left * -3f + Vector3.Up * -4f);
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -50.5f + Vector3.Left * -1.5f + Vector3.Up * -10f);
 
 		CrosshairPanel?.OnEvent( "fire" );
 
