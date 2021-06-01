@@ -103,6 +103,9 @@ partial class Shotgun : BaseHeistWeapon
 		Particles.Create( "particles/pistol_muzzleflash.vpcf", EffectEntity, "muzzle" );
 
 		ViewModelEntity?.SetAnimBool( "fire_double", true );
+			
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * 3f + Vector3.Left * -3f + Vector3.Up * -4f);
+
 		CrosshairPanel?.OnEvent( "fire" );
 
 		if ( IsLocalPawn )

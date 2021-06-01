@@ -77,6 +77,9 @@ partial class Crossbow : BaseHeistWeapon
 		}
 
 		ViewModelEntity?.SetAnimBool( "fire", true );
+			
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -3f + Vector3.Left * -2f + Vector3.Up * -2f);
+
 		CrosshairPanel?.OnEvent( "fire" );
 	}
 }

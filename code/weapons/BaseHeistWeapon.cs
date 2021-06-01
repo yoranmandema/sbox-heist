@@ -169,7 +169,14 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 			new Sandbox.ScreenShake.Perlin();
 		}
 
+		DoShootAnims();
+	}
+
+	protected virtual void DoShootAnims () {
 		ViewModelEntity?.SetAnimBool( "fire", true );
+
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * 1.5f + Vector3.Left * -1.5f + Vector3.Up * -2f);
+		
 		CrosshairPanel?.OnEvent( "fire" );
 	}
 
