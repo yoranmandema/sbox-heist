@@ -25,7 +25,8 @@ partial class HeistViewModel : BaseViewModel
 	
 
 
-	Vector3 WalkCycleOffsets => new Vector3(40f,-20f,20f);
+	Vector3 WalkCycleOffsets => new Vector3(50f,20f,20f);
+	float ForwardBobbing => 3f;
 	Vector3 Offset => new Vector3(2f,10,-5f);
 	float VelocityClamp => 3f;
 
@@ -56,7 +57,15 @@ partial class HeistViewModel : BaseViewModel
 			walkBob += Time.Delta * 30.0f * speed;
 		}
 
-		upDownOffset += speed * -LookUpSpeedScale* Time.Delta;
+		if (Owner.Velocity.Length < 60) {
+			var step = MathF.Round(walkBob / 90);
+			
+			walkBob += (step * 90 - walkBob) * 10f * Time.Delta;
+		}
+				
+		walkBob %= 360;
+
+		upDownOffset += speed * -LookUpSpeedScale * Time.Delta;
 		upDownOffset += camSetup.Rotation.Forward.z * -LookUpPitchScale * Time.Delta;
 
 		ApplyDamping(ref upDownOffset, UpDownDamping);
@@ -67,9 +76,14 @@ partial class HeistViewModel : BaseViewModel
 		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * Time.Delta * MouseScale;
 		acceleration += -velocity * ReturnForce * Time.Delta;
 
-		acceleration += Vector3.Forward * WalkCycle(0.5f, 5f) * speed * WalkCycleOffsets.x * Time.Delta;
-		acceleration += Vector3.Left * WalkCycle(0.5f, 1f)* speed * WalkCycleOffsets.y * Time.Delta;
-		acceleration += Vector3.Up * WalkCycle(0.5f, 10f) * speed * WalkCycleOffsets.z * Time.Delta;
+		// Apply horizontal offsets based on walking direction
+		var horizontalForwardBob = WalkCycle(0.5f, 3f) * speed * WalkCycleOffsets.x * Time.Delta;
+
+		acceleration += forward.WithZ(0).Normal.Dot(Owner.Velocity.Normal) * Vector3.Forward * ForwardBobbing * horizontalForwardBob;
+
+		// Apply left bobbing and up/down bobbing
+		acceleration += Vector3.Left * WalkCycle(0.5f, 2f) * speed * WalkCycleOffsets.y * Time.Delta;
+		acceleration += Vector3.Up * WalkCycle(0.5f, 2f, true) * speed * WalkCycleOffsets.z * Time.Delta;
 
 		velocity += acceleration * Time.Delta;
 
@@ -97,8 +111,15 @@ partial class HeistViewModel : BaseViewModel
 		Position += (Rotation.Forward - camSetup.Rotation.Forward) * -PivotForce;
 	}
 
-	private float WalkCycle (float speed, float power) {
-		return 1f - MathF.Pow(MathF.Sin( walkBob * speed ), power);
+	private float WalkCycle (float speed, float power, bool abs = false) {
+		var sin = MathF.Sin( walkBob * speed );
+		var sign = Math.Sign(sin);
+	
+		if (abs) {
+			sign = 1;
+		}
+
+		return MathF.Pow(sin, power) * sign;
 	}
 
 	public void ApplyImpulse (Vector3 impulse) {
