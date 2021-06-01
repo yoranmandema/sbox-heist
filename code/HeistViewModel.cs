@@ -11,12 +11,13 @@ partial class HeistViewModel : BaseViewModel
 	float MouseScale => 1.5f;
 	float ReturnForce => 400f;
 	float Damping => 18f;
-	float AccelDamping => 0.2f;
+	float AccelDamping => 0.05f;
 	float PivotForce => 1000f;
 	float VelocityScale => 10f;
 	float RotationScale => 2.5f;
 	float LookUpScale => 5f;
 
+	Vector3 WalkCycleOffsets => new Vector3(40f,-20f,20f);
 	Vector3 Offset => new Vector3(2f,10,-3f);
 	float VelocityClamp => 3f;
 
@@ -44,9 +45,9 @@ partial class HeistViewModel : BaseViewModel
 		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * Time.Delta * MouseScale;
 		acceleration += -velocity * ReturnForce * Time.Delta;
 
-		acceleration += Vector3.Forward * WalkCycle(0.5f, 5f) * speed * 0.2f;
-		acceleration += Vector3.Left * WalkCycle(0.5f, 1f)* speed * -0.25f;
-		acceleration += Vector3.Up * WalkCycle(0.5f, 10f) * speed * 0.25f;
+		acceleration += Vector3.Forward * WalkCycle(0.5f, 5f) * speed * WalkCycleOffsets.x * Time.Delta;
+		acceleration += Vector3.Left * WalkCycle(0.5f, 1f)* speed * WalkCycleOffsets.y * Time.Delta;
+		acceleration += Vector3.Up * WalkCycle(0.5f, 10f) * speed * WalkCycleOffsets.z * Time.Delta;
 
 		velocity += acceleration * Time.Delta;
 
