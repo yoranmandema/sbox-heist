@@ -15,12 +15,27 @@ partial class HeistViewModel : BaseViewModel
 	float PivotForce => 1000f;
 	float VelocityScale => 10f;
 	float RotationScale => 2.5f;
-	float LookUpScale => 5f;
+	float LookUpPitchScale => 80f;
+	float LookUpSpeedScale => 80f;
+	float UpDownDamping => 10f;
+
+	float NoiseSpeed => 0.8f;
+
+	float NoiseScale => 20f;
+	
+
 
 	Vector3 WalkCycleOffsets => new Vector3(40f,-20f,20f);
-	Vector3 Offset => new Vector3(2f,10,-3f);
+	Vector3 Offset => new Vector3(2f,10,-5f);
 	float VelocityClamp => 3f;
 
+	float noiseZ = 0;
+	float noisePos = 0;
+	float upDownOffset = 0;
+
+	public HeistViewModel () {
+		noiseZ = Rand.Float(-10000,10000);
+	}
 
 	public override void PostCameraSetup( ref CameraSetup camSetup )
 	{
@@ -31,7 +46,7 @@ partial class HeistViewModel : BaseViewModel
 
 	private void AddCameraEffects( ref CameraSetup camSetup )
 	{
-		var speed = Owner.Velocity.Length.LerpInverse( 0, 320 );
+		var speed = Owner.Velocity.Length.LerpInverse( 30, 320 );
 		var left = camSetup.Rotation.Left;
 		var up = camSetup.Rotation.Up;
 		var forward = camSetup.Rotation.Forward;
@@ -40,6 +55,13 @@ partial class HeistViewModel : BaseViewModel
 		{
 			walkBob += Time.Delta * 30.0f * speed;
 		}
+
+		upDownOffset += speed * -LookUpSpeedScale* Time.Delta;
+		upDownOffset += camSetup.Rotation.Forward.z * -LookUpPitchScale * Time.Delta;
+
+		ApplyDamping(ref upDownOffset, UpDownDamping);
+
+		noisePos += Time.Delta * NoiseSpeed;
 
 		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * Time.Delta * MouseScale;
 		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * Time.Delta * MouseScale;
@@ -55,16 +77,22 @@ partial class HeistViewModel : BaseViewModel
 
 		ApplyDamping( ref velocity, Damping );
 
+		acceleration += new Vector3 (
+			Noise.Perlin( noisePos, 0f, noiseZ ),
+			Noise.Perlin( noisePos, 10f, noiseZ ),
+			Noise.Perlin( noisePos, 20f, noiseZ )
+		) * NoiseScale * Time.Delta;
+
 		velocity = velocity.Normal * Math.Clamp(velocity.Length, 0, VelocityClamp);
 
 		Rotation = Local.Pawn.EyeRot;
 		Rotation *= Rotation.FromYaw(velocity.y * RotationScale);
-		Rotation *= Rotation.FromRoll(-velocity.y * RotationScale);
+		Rotation *= Rotation.FromRoll(-velocity.y * RotationScale - 10f);
 		Rotation *= Rotation.FromPitch(-velocity.z * RotationScale );
 
 		Position += forward * (velocity.x * VelocityScale+ Offset.x);
 		Position += left * (velocity.y* VelocityScale + Offset.y);
-		Position += up * (velocity.z* VelocityScale + Offset.z + camSetup.Rotation.Forward.z * -LookUpScale) ;
+		Position += up * (velocity.z* VelocityScale + Offset.z + upDownOffset) ;
 
 		Position += (Rotation.Forward - camSetup.Rotation.Forward) * -PivotForce;
 	}
@@ -75,6 +103,14 @@ partial class HeistViewModel : BaseViewModel
 
 	public void ApplyImpulse (Vector3 impulse) {
 		acceleration += impulse;
+	}
+
+	private void ApplyDamping( ref float value, float damping )
+	{
+		var magnitude = value;
+
+		var drop = magnitude * damping * Time.Delta;
+		value *= ( magnitude - drop) / magnitude;
 	}
 
 	private void ApplyDamping( ref Vector3 value, float damping )
