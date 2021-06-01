@@ -39,7 +39,7 @@ partial class Grenade : BaseHeistWeapon
                     Owner = Owner
                 };
 
-                grenade.Shoot(Owner.EyeRot.Forward);
+                grenade.Shoot(Owner.EyeRot.Forward, Owner.Velocity);
             }
     }
 

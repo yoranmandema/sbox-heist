@@ -9,6 +9,9 @@ partial class GrenadeProjectile : ModelEntity
 	public float Bounce => 0.5f;
 	public float FuseTime => 3f;
 	public float InitialVelocity => 1000f;
+	public float Damage => 250f;
+
+	public float UpForce => 0.1f;
 
 	[Net] public Vector3 SimVelocity {get; set;}
 
@@ -20,12 +23,6 @@ partial class GrenadeProjectile : ModelEntity
 
 	private float time;
 
-	public GrenadeProjectile () {
-		Log.Info($"constructor() called!");
-
-		Log.Info($"{Direction}");
-	}
-
 	public override void Spawn()
 	{
 		base.Spawn();
@@ -35,14 +32,14 @@ partial class GrenadeProjectile : ModelEntity
 		SetModel( "models/ball/ball.vmdl" );
 
 		Scale = 0.2f;
-
-		Log.Info($"Spawn() called!");
 	}
 
-	public void Shoot (Vector3 direction) {
-		Direction = direction;
+	public void Shoot (Vector3 direction, Vector3 ownerVelocity) {
+		Direction = direction + Vector3.Up * UpForce;
 
-		SimVelocity = Direction * InitialVelocity; 
+		Direction = Direction.Normal;
+
+		SimVelocity = Direction * InitialVelocity + ownerVelocity; 
 
 		lastPosition = Position;
 
@@ -106,11 +103,26 @@ partial class GrenadeProjectile : ModelEntity
 		DebugOverlay.ScreenText(new Vector2(100,100), 0, Color.White, $"{time}");
 
 		if (time >= FuseTime) {
-			Delete();
+			DoExplosion(tr);
 		}
 
 		time += Time.Delta;
 
 		lastPosition = currentPosition;
+	}
+
+	public void DoExplosion (TraceResult tr) {
+		var damage = DamageInfo.Explosion(Position, Vector3.One * 10000f, Damage)
+				.UsingTraceResult( tr )
+				.WithAttacker( Owner )
+				.WithWeapon( this );
+
+		Particles.Create( "particles/explosion_fireball.vpcf", Position);
+		Particles.Create( "particles/explosion_flare.vpcf", Position);
+		Particles.Create( "particles/explosion_smoke.vpcf", Position);
+
+		Log.Info("" + damage.Damage);
+
+		Delete();
 	}
 }
