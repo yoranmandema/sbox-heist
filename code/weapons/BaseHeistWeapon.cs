@@ -27,9 +27,7 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	[Net, Predicted]
 	public TimeSince TimeSinceDeployed { get; set; }
 
-
 	public PickupTrigger PickupTrigger { get; protected set; }
-
 
 	public int AvailableAmmo()
 	{

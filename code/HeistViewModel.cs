@@ -64,7 +64,7 @@ partial class HeistViewModel : BaseViewModel
 			walkBob += (step * 90 - walkBob) * 10f * Time.Delta;
 		}
 				
-		if (walkController.Duck.IsActive) {
+		if (walkController?.Duck?.IsActive == true) {
 			acceleration += CrouchOffset * Time.Delta;
 		}
 

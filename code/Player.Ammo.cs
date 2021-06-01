@@ -62,5 +62,6 @@ public enum AmmoType
 {
 	Pistol,
 	Buckshot,
-	Crossbow
+	Crossbow,
+	Grenade
 }
