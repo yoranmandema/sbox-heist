@@ -1,0 +1,17 @@
+
+@PointClass editormodel( "weapons/rust_pumpshotgun/rust_pumpshotgun.vmdl" ) = dm_shotgun
+[
+]
+
+@PointClass editormodel( "weapons/rust_pistol/rust_pistol.vmdl" ) = dm_pistol
+[
+]
+
+@PointClass editormodel( "weapons/rust_smg/rust_smg.vmdl" ) = dm_smg
+[
+]
+
+
+@PointClass editormodel( "weapons/rust_pistol/rust_pistol.vmdl" ) = dm_crossbow
+[
+]
