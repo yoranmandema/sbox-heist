@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Sandbox;
 
 
@@ -7,16 +9,24 @@ partial class GrenadeProjectile : ModelEntity
 
 	public float Size => 3f;
 	public float Bounce => 0.5f;
-	public float FuseTime => 3f;
+
+	public float BounceThreshold => 250f;
+	public float RollDrag = 1f;
+
+	public float FuseTime => 5f;
 	public float InitialVelocity => 1000f;
 	public float Damage => 250f;
-
 	public float UpForce => 0.1f;
 
-	[Net] public Vector3 SimVelocity {get; set;}
+	public float ExplosionRadius => 150f;
+	public float ExplosionForce = 2500f;
 
-	[Net] public Vector3 Direction {get; set;} = Vector3.Forward;
-	[Net] public bool IsSimulating {get; set;} = true;
+	[Net] public bool IsRolling { get; set; }
+
+	[Net] public Vector3 SimVelocity { get; set; }
+
+	[Net] public Vector3 Direction { get; set; } = Vector3.Forward;
+	[Net] public bool IsSimulating { get; set; } = true;
 
 	private Vector3 currentPosition;
 	private Vector3 lastPosition;
@@ -34,12 +44,13 @@ partial class GrenadeProjectile : ModelEntity
 		Scale = 0.2f;
 	}
 
-	public void Shoot (Vector3 direction, Vector3 ownerVelocity) {
+	public void Shoot( Vector3 direction, Vector3 ownerVelocity )
+	{
 		Direction = direction + Vector3.Up * UpForce;
 
 		Direction = Direction.Normal;
 
-		SimVelocity = Direction * InitialVelocity + ownerVelocity; 
+		SimVelocity = Direction * InitialVelocity + ownerVelocity;
 
 		lastPosition = Position;
 
@@ -52,58 +63,58 @@ partial class GrenadeProjectile : ModelEntity
 		if ( !IsServer )
 			return;
 
-		if (IsSimulating) { 
+		if ( IsSimulating && !IsRolling )
+		{
 			SimVelocity += PhysicsWorld.Gravity * Time.Delta;
 		}
 
 		currentPosition = Position;
 
-		DebugOverlay.Line(lastPosition, currentPosition, Color.Yellow, 5f);
+		DebugOverlay.Line( lastPosition, currentPosition, Color.Yellow, 5f );
+			
+		if ( IsRolling )
+		{
+			DoRoll();
+		}
 
 		var start = Position;
 		var end = start + SimVelocity * Time.Delta;
+
 
 		var tr = Trace.Ray( start, end )
 				.UseHitboxes()
 				//.HitLayer( CollisionLayer.Water, !InWater )
 				.Ignore( Owner )
 				.Ignore( this )
-				.Size( Size )
+				.Size( Size * 0.5f )
 				.Run();
+
 
 		if ( tr.Hit )
 		{
-			//
-			// Surface impact effect
-			//
-			// tr.Normal = Rotation.Forward * -1;
-			tr.Surface.DoBulletImpact( tr );	
+			DebugOverlay.Text(tr.EndPos, $"{Vector3.Reflect( SimVelocity.Normal, tr.Normal ).Dot(tr.Normal)}", Color.Cyan, 5f);
 
-			if (-SimVelocity.Length < tr.Surface.BounceThreshold) {
-				SimVelocity = Vector3.Reflect(SimVelocity, tr.Normal) * Bounce;
+			DebugOverlay.Line( tr.EndPos, tr.EndPos + Vector3.Reflect( SimVelocity.Normal, tr.Normal ) * 10f, Color.Cyan, 5f );
 
-				if (SimVelocity.Length < 25f) {
-					IsSimulating = false;
+			if ( (SimVelocity.Length < System.MathF.Max(tr.Surface.BounceThreshold, BounceThreshold)) && !IsRolling )
+			{
+				IsRolling = true;
 
-					SimVelocity = Vector3.Zero;
-				}
+				SimVelocity = Vector3.VectorPlaneProject(SimVelocity, tr.Normal);
 			} else {
-				DebugOverlay.Line(tr.EndPos, tr.EndPos + tr.Normal * 10f, Color.Red, 5f);
+				DoBounce( tr );
+
+				DebugOverlay.Line( tr.EndPos, tr.EndPos + tr.Normal * 10f, Color.Red, 5f );
 			}
-
-			Position = tr.EndPos + tr.Normal * Size * 0.5f * Bounce;
-
-
 		}
 		else
 		{
 			Position = end;
 		}
 
-		DebugOverlay.ScreenText(new Vector2(100,100), 0, Color.White, $"{time}");
-
-		if (time >= FuseTime) {
-			DoExplosion(tr);
+		if ( time >= FuseTime )
+		{
+			DoExplosion( Position );
 		}
 
 		time += Time.Delta;
@@ -111,17 +122,59 @@ partial class GrenadeProjectile : ModelEntity
 		lastPosition = currentPosition;
 	}
 
-	public void DoExplosion (TraceResult tr) {
-		var damage = DamageInfo.Explosion(Position, Vector3.One * 10000f, Damage)
-				.UsingTraceResult( tr )
-				.WithAttacker( Owner )
-				.WithWeapon( this );
+	private void ApplyDamping( ref Vector3 value, float damping )
+	{
+		var magnitude = value.Length;
 
-		Particles.Create( "particles/explosion_fireball.vpcf", Position);
-		Particles.Create( "particles/explosion_flare.vpcf", Position);
-		Particles.Create( "particles/explosion_smoke.vpcf", Position);
+		if ( magnitude != 0 )
+		{
+			var drop = magnitude * damping * Time.Delta;
+			value *= System.MathF.Max( magnitude - drop, 0 ) / magnitude;
+		}
+	}
 
-		Log.Info("" + damage.Damage);
+	private void DoBounce( TraceResult tr )
+	{
+		SimVelocity = Vector3.Reflect( SimVelocity, tr.Normal ) * Bounce;
+
+		Position = tr.EndPos + tr.Normal * Size * 0.5f ;
+	}
+
+	private void DoRoll()
+	{
+		var groundTrace = Trace.Ray( Position, Position + Vector3.Down * Size * 0.5f )
+			.UseHitboxes()
+			//.HitLayer( CollisionLayer.Water, !InWater )
+			.Ignore( Owner )
+			.Ignore( this )
+			.Size( Size * 0.25f )
+			.Run();
+
+		if (!groundTrace.Hit) {
+			IsRolling = false;
+
+			return;
+		}
+
+		DebugOverlay.Line( groundTrace.EndPos, groundTrace.EndPos + groundTrace.Normal * 10f, Color.Green, 5f );
+		DebugOverlay.Line( groundTrace.StartPos, groundTrace.EndPos, Color.Green * 0.5f, 5f );
+
+		SimVelocity = Vector3.VectorPlaneProject(SimVelocity, groundTrace.Normal);
+
+		SimVelocity += Vector3.VectorPlaneProject(PhysicsWorld.Gravity, groundTrace.Normal) * Time.Delta;
+
+		var simVel = SimVelocity;
+
+		ApplyDamping(ref simVel, RollDrag);
+
+		SimVelocity = simVel;
+
+		DebugOverlay.Line( groundTrace.EndPos, groundTrace.EndPos + SimVelocity, Color.Orange, 0 );
+	}
+
+	public void DoExplosion( Vector3 position )
+	{
+		Explosion.Create( this, position, ExplosionRadius, Damage, ExplosionForce );
 
 		Delete();
 	}
