@@ -11,22 +11,28 @@ partial class GrenadeProjectile : ModelEntity
 	public float Bounce => 1f;
 
 	public float BounceThreshold => 250f;
+
+	public float PlayerBounce => 0.1f;
+
 	public float RollDrag = 1.5f;
 
-	public float FuseTime => 5f;
+	public float FuseTime => 3f;
 	public float InitialVelocity => 1000f;
 	public float Damage => 250f;
 	public float UpForce => 0.1f;
 
+	public float ImpactDamage => 5f;
+	public float ImpactDamageThreshold => 350f;
+
 	public float ExplosionRadius => 150f;
 	public float ExplosionForce = 2500f;
 
-	[Net] public bool IsRolling { get; set; }
+	[Net, Predicted] public bool IsRolling { get; set; }
 
-	[Net] public Vector3 SimVelocity { get; set; }
+	[Net, Predicted] public Vector3 SimVelocity { get; set; }
 
-	[Net] public Vector3 Direction { get; set; } = Vector3.Forward;
-	[Net] public bool IsSimulating { get; set; } = true;
+	[Net, Predicted] public Vector3 Direction { get; set; } = Vector3.Forward;
+	[Net, Predicted] public bool IsSimulating { get; set; } = true;
 
 	private Vector3 currentPosition;
 	private Vector3 lastPosition;
@@ -70,7 +76,7 @@ partial class GrenadeProjectile : ModelEntity
 
 		currentPosition = Position;
 
-		DebugOverlay.Line( lastPosition, currentPosition, Color.Yellow, 5f );
+		DebugOverlay.Line( lastPosition, currentPosition, Color.Yellow.WithAlpha(0.5f), 5f );
 			
 		if ( IsRolling )
 		{
@@ -108,6 +114,9 @@ partial class GrenadeProjectile : ModelEntity
 
 				SimVelocity = projectedVel * projectedVel.Normal.Dot(SimVelocity.Normal);
 			} else {
+
+				DoImpactDamage ( tr );
+
 				DoBounce( tr );
 
 				DebugOverlay.Line( tr.EndPos, tr.EndPos + tr.Normal * 10f, Color.Red, 5f );
@@ -139,9 +148,28 @@ partial class GrenadeProjectile : ModelEntity
 		}
 	}
 
+	private void DoImpactDamage ( TraceResult tr ) {
+		if (!tr.Entity.IsValid()) return;
+		if (SimVelocity.Length < ImpactDamageThreshold) return;
+
+		var damageInfo = DamageInfo.Generic(ImpactDamage)
+			.UsingTraceResult( tr )
+			.WithFlag(DamageFlags.PhysicsImpact)
+			.WithAttacker( Owner )
+			.WithWeapon( this );
+
+		tr.Entity.TakeDamage(damageInfo);
+	}
+
 	private void DoBounce( TraceResult tr )
 	{
-		SimVelocity = Vector3.Reflect( SimVelocity, tr.Normal ) * ((Bounce + tr.Surface.Elasticity)/ 2f);
+		float appliedBounce = ((Bounce + tr.Surface.Elasticity)/ 2f);
+
+		if (tr.Entity is Player player) {
+			appliedBounce = PlayerBounce;
+		}
+
+		SimVelocity = Vector3.Reflect( SimVelocity, tr.Normal ) * appliedBounce;
 
 		Position = tr.EndPos + tr.Normal * Size * 0.5f ;
 	}
