@@ -4,6 +4,8 @@ using System.Linq;
 
 partial class HeistViewModel : BaseViewModel
 {
+	[Net,Predicted] public BaseHeistWeapon Weapon {get; set;}
+
 	float walkBob = 0;
 	Vector3 velocity;
 	Vector3 acceleration;
@@ -14,14 +16,13 @@ partial class HeistViewModel : BaseViewModel
 	float PivotForce => 1000f;
 	float VelocityScale => 10f;
 	float RotationScale => 2.5f;
-	float LookUpPitchScale => 70f;
-	float LookUpSpeedScale => 80f;
-	float UpDownDamping => 10f;
+	float LookUpPitchScale => 10f;
+	float LookUpSpeedScale => 10f;
 	float NoiseSpeed => 0.8f;
 	float NoiseScale => 20f;
 
 	Vector3 WalkCycleOffsets => new Vector3( 50f, 20f, 20f );
-	float ForwardBobbing => 3f;
+	float ForwardBobbing => 4f;
 	float SideWalkOffset => 80f;
 	public Vector3 AimOffset {get; set;} =  new Vector3( 10f, 16.9f, 2.8f );
 	Vector3 Offset => new Vector3( 1f, 13f, -8f );
@@ -37,6 +38,11 @@ partial class HeistViewModel : BaseViewModel
 	float sprintLerp = 0;
 	float aimLerp = 0;
 
+	float smoothedDelta = 0;
+
+	float DeltaTime => smoothedDelta;
+	
+
 	public HeistViewModel()
 	{
 		noiseZ = Rand.Float( -10000, 10000 );
@@ -50,9 +56,21 @@ partial class HeistViewModel : BaseViewModel
 		AddCameraEffects( ref camSetup );
 	}
 
+	private void SmoothDeltaTime () {
+		var delta = (Time.Delta - smoothedDelta) * Time.Delta;
+		var clamped = MathF.Min(MathF.Abs(delta), 1/60f);
+
+		smoothedDelta += clamped * MathF.Sign(delta);
+	}
+
 	private void AddCameraEffects( ref CameraSetup camSetup )
 	{
-		SmoothedVelocity += (Owner.Velocity - SmoothedVelocity) * 5f * Time.Delta;
+		SmoothDeltaTime();
+
+		DebugOverlay.ScreenText(new Vector2(100,400),0, Color.White, $"Smoothed delta: {DeltaTime}", 0);
+		DebugOverlay.ScreenText(new Vector2(100,400),1, Color.White, $"Delta: {Time.Delta}", 0);
+
+		SmoothedVelocity += (Owner.Velocity - SmoothedVelocity) * 5f * DeltaTime;
 
 		var camTransform = new Transform(Owner.EyePos, Owner.EyeRot);
 		var speed = Owner.Velocity.Length.LerpInverse( 0, 320 );
@@ -69,13 +87,9 @@ partial class HeistViewModel : BaseViewModel
 						.Run();
 
 		LerpTowards( ref avoidance, avoidanceTrace.Hit ? (1f - avoidanceTrace.Fraction) : 0, 10f );
-		LerpTowards( ref sprintLerp, walkController?.Input.Down( InputButton.Run ) == true ? 1 : 0, 8f );
-		LerpTowards( ref aimLerp, walkController?.Input.Down( InputButton.Attack2 ) == true ? 1 : 0, 16f );
-
-		SetAnimBool("idle_aim", walkController?.Input.Down( InputButton.Attack2 ) == true);
-		SetAnimBool("idle", false);
-
-		DebugOverlay.ScreenText(new Vector2(100,300), 4, Color.White, $"{GetAttachment("muzzle",true).Position}");
+		LerpTowards( ref sprintLerp, Weapon.IsInSprint ? 1 : 0, 8f );
+		LerpTowards( ref aimLerp, Weapon.IsAiming ? 1 : 0, 16f );
+		LerpTowards( ref upDownOffset, speed * -LookUpSpeedScale + camSetup.Rotation.Forward.z * -LookUpPitchScale, LookUpPitchScale );
 
 		bobSpeed *= (1 - sprintLerp * 0.25f);
 
@@ -93,34 +107,29 @@ partial class HeistViewModel : BaseViewModel
 
 		if ( walkController?.Duck?.IsActive == true )
 		{
-			acceleration += CrouchOffset * Time.Delta * (1-aimLerp);
+			acceleration += CrouchOffset * DeltaTime * (1-aimLerp);
 		}
 
 		walkBob %= 360;
 
-		upDownOffset += speed * -LookUpSpeedScale * Time.Delta;
-		upDownOffset += camSetup.Rotation.Forward.z * -LookUpPitchScale * Time.Delta;
+		noisePos += DeltaTime * NoiseSpeed;
 
-		ApplyDamping( ref upDownOffset, UpDownDamping );
-
-		noisePos += Time.Delta * NoiseSpeed;
-
-		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * Time.Delta * MouseScale  * (1f-aimLerp * 2f);
-		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * Time.Delta * MouseScale  * (1f-aimLerp * 2f);
-		acceleration += -velocity * ReturnForce * Time.Delta;
+		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * DeltaTime * MouseScale  * (1f-aimLerp * 2f);
+		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * DeltaTime * MouseScale  * (1f-aimLerp * 2f);
+		acceleration += -velocity * ReturnForce * DeltaTime;
 
 		// Apply horizontal offsets based on walking direction
-		var horizontalForwardBob = WalkCycle( 0.5f, 3f ) * speed * WalkCycleOffsets.x * Time.Delta;
+		var horizontalForwardBob = WalkCycle( 0.5f, 3f ) * speed * WalkCycleOffsets.x * DeltaTime;
 
 		acceleration += forward.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Forward * ForwardBobbing * horizontalForwardBob;
 
 		// Apply left bobbing and up/down bobbing
-		acceleration += Vector3.Left * WalkCycle( 0.5f, 2f ) * speed * WalkCycleOffsets.y * (1 + sprintLerp) * Time.Delta;
-		acceleration += Vector3.Up * WalkCycle( 0.5f, 2f, true ) * speed * WalkCycleOffsets.z * Time.Delta;
+		acceleration += Vector3.Left * WalkCycle( 0.5f, 2f ) * speed * WalkCycleOffsets.y * (1 + sprintLerp) * DeltaTime;
+		acceleration += Vector3.Up * WalkCycle( 0.5f, 2f, true ) * speed * WalkCycleOffsets.z * DeltaTime;
 
-		acceleration += left.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Left * speed * SideWalkOffset * Time.Delta * (1-aimLerp);
+		acceleration += left.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Left * speed * SideWalkOffset * DeltaTime * (1-aimLerp* 0.5f);
 
-		velocity += acceleration * Time.Delta;
+		velocity += acceleration * DeltaTime;
 
 		ApplyDamping( ref acceleration, AccelDamping );
 
@@ -136,10 +145,10 @@ partial class HeistViewModel : BaseViewModel
 
 		Rotation desiredRotation = Local.Pawn.EyeRot;
 		desiredRotation *= Rotation.FromAxis(Vector3.Up, velocity.y * RotationScale* (1-aimLerp));
-		desiredRotation *= Rotation.FromAxis(Vector3.Forward, -velocity.y * RotationScale* (1-aimLerp) - 10f * (1-aimLerp));
+		desiredRotation *= Rotation.FromAxis(Vector3.Forward, -velocity.y * RotationScale* (1-aimLerp * 0.0f) - 10f * (1-aimLerp));
 		desiredRotation *= Rotation.FromAxis(Vector3.Right, velocity.z * RotationScale* (1-aimLerp));
 
-		Rotation = desiredRotation;
+		Rotation = desiredRotation; 
 
 		var desiredOffset = Vector3.Lerp(Offset, AimOffset, aimLerp);
 
@@ -177,17 +186,9 @@ partial class HeistViewModel : BaseViewModel
 		acceleration += impulse;
 	}
 
-	private void ApplyDamping( ref float value, float damping )
-	{
-		var magnitude = value;
-
-		var drop = magnitude * damping * Time.Delta;
-		value *= (magnitude - drop) / magnitude;
-	}
-
 	private void LerpTowards( ref float value, float desired, float speed )
 	{
-		var delta = (desired - value) * speed * Time.Delta;
+		var delta = (desired - value) * speed * DeltaTime;
 		var deltaAbs = MathF.Min( MathF.Abs( delta ), MathF.Abs( desired - value ) ) * MathF.Sign( delta );
 
 		if ( MathF.Abs( desired - value ) < 0.001f )
@@ -206,7 +207,7 @@ partial class HeistViewModel : BaseViewModel
 
 		if ( magnitude != 0 )
 		{
-			var drop = magnitude * damping * Time.Delta;
+			var drop = magnitude * damping * DeltaTime;
 			value *= Math.Max( magnitude - drop, 0 ) / magnitude;
 		}
 	}

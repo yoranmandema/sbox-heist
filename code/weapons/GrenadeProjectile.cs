@@ -18,7 +18,7 @@ partial class GrenadeProjectile : ModelEntity
 
 	public float FuseTime => 3f;
 	public float InitialVelocity => 1000f;
-	public float Damage => 250f;
+	public float Damage => 100f;
 	public float UpForce => 0.1f;
 
 	public float ImpactDamage => 5f;
@@ -27,12 +27,13 @@ partial class GrenadeProjectile : ModelEntity
 	public float ExplosionRadius => 150f;
 	public float ExplosionForce = 2500f;
 
-	[Net, Predicted] public bool IsRolling { get; set; }
+	[Net] public bool IsRolling { get; set; }
 
-	[Net, Predicted] public Vector3 SimVelocity { get; set; }
+	[Net] public Vector3 SimVelocity { get; set; }
 
-	[Net, Predicted] public Vector3 Direction { get; set; } = Vector3.Forward;
-	[Net, Predicted] public bool IsSimulating { get; set; } = true;
+	[Net] public Vector3 Direction { get; set; } = Vector3.Forward;
+	[Net] public bool IsSimulating { get; set; } = true;
+	[Net] public Entity WeaponEntity { get; set; }
 
 	private Vector3 currentPosition;
 	private Vector3 lastPosition;
@@ -50,8 +51,10 @@ partial class GrenadeProjectile : ModelEntity
 		Scale = 0.2f;
 	}
 
-	public void Shoot( Vector3 direction, Vector3 ownerVelocity )
+	public void Shoot(Entity weaponEnt, Vector3 direction, Vector3 ownerVelocity )
 	{
+		WeaponEntity = weaponEnt;
+
 		Direction = direction + Vector3.Up * UpForce;
 
 		Direction = Direction.Normal;
@@ -75,8 +78,6 @@ partial class GrenadeProjectile : ModelEntity
 		}
 
 		currentPosition = Position;
-
-		DebugOverlay.Line( lastPosition, currentPosition, Color.Yellow.WithAlpha(0.5f), 5f );
 			
 		if ( IsRolling )
 		{
@@ -85,7 +86,6 @@ partial class GrenadeProjectile : ModelEntity
 
 		var start = Position;
 		var end = start + SimVelocity * Time.Delta;
-
 
 		var tr = Trace.Ray( start, end )
 				.UseHitboxes()
@@ -98,10 +98,6 @@ partial class GrenadeProjectile : ModelEntity
 
 		if ( tr.Hit )
 		{
-			DebugOverlay.Text(tr.EndPos, $"{tr.Surface.Elasticity}", Color.Cyan, 5f);
-
-			DebugOverlay.Line( tr.EndPos, tr.EndPos + Vector3.Reflect( SimVelocity.Normal, tr.Normal ) * 10f, Color.Cyan, 5f );
-
 			bool canRoll = SimVelocity.Length < System.MathF.Max(tr.Surface.BounceThreshold, BounceThreshold);
 			canRoll = canRoll || (Vector3.Reflect( SimVelocity.Normal, tr.Normal ).Dot(tr.Normal) < 0.35f && tr.Normal.z > 0.1f);
 
@@ -118,8 +114,6 @@ partial class GrenadeProjectile : ModelEntity
 				DoImpactDamage ( tr );
 
 				DoBounce( tr );
-
-				DebugOverlay.Line( tr.EndPos, tr.EndPos + tr.Normal * 10f, Color.Red, 5f );
 			}
 		}
 		else
@@ -156,7 +150,7 @@ partial class GrenadeProjectile : ModelEntity
 			.UsingTraceResult( tr )
 			.WithFlag(DamageFlags.PhysicsImpact)
 			.WithAttacker( Owner )
-			.WithWeapon( this );
+			.WithWeapon( WeaponEntity );
 
 		tr.Entity.TakeDamage(damageInfo);
 	}
@@ -190,8 +184,6 @@ partial class GrenadeProjectile : ModelEntity
 			return;
 		}
 
-		DebugOverlay.Line( groundTrace.EndPos, groundTrace.EndPos + groundTrace.Normal * 10f, Color.Green, 5f );
-		DebugOverlay.Line( groundTrace.StartPos, groundTrace.EndPos, Color.Green * 0.5f, 5f );
 
 		SimVelocity = Vector3.VectorPlaneProject(SimVelocity, groundTrace.Normal);
 
@@ -202,16 +194,16 @@ partial class GrenadeProjectile : ModelEntity
 		ApplyDamping(ref simVel, RollDrag * groundTrace.Surface.Friction);
 
 		SimVelocity = simVel;
-
-		DebugOverlay.Line( groundTrace.EndPos, groundTrace.EndPos + SimVelocity, Color.Orange, 0 );
-
-		DebugOverlay.Text(groundTrace.EndPos, $"{groundTrace.Surface.Friction}", Color.Orange, 5f);
-
 	}
 
 	public void DoExplosion( Vector3 position )
 	{
-		Explosion.Create( this, position, ExplosionRadius, Damage, ExplosionForce );
+		Explosion.Create(WeaponEntity)
+			.At(position)
+			.WithDamage(Damage)
+			.WithRadius(ExplosionRadius)
+			.WithForce(ExplosionForce)
+			.Explode();
 
 		Delete();
 	}

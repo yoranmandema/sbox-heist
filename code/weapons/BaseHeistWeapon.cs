@@ -14,6 +14,7 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public virtual float ReloadTime => 3.0f;
 	public virtual int Bucket => 1;
 	public virtual int BucketWeight => 100;
+	public virtual float SprintOutTime => 0.5f;
 
 	[Net, Predicted]
 	public int AmmoClip { get; set; }
@@ -25,7 +26,16 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public bool IsReloading { get; set; }
 
 	[Net, Predicted]
+	public bool IsAiming { get; set; }
+
+	[Net, Predicted]
+	public bool IsInSprint { get; set; }
+
+	[Net, Predicted]
 	public TimeSince TimeSinceDeployed { get; set; }
+
+	[Net, Predicted]
+	public TimeSince TimeSinceSprint { get; set; }
 
 	public PickupTrigger PickupTrigger { get; protected set; }
 
@@ -94,6 +104,14 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		if ( IsReloading && TimeSinceReload > ReloadTime )
 		{
 			OnReloadFinish();
+		}
+
+		IsInSprint = owner.Input?.Down( InputButton.Run ) == true;
+
+		IsAiming = owner.Input?.Down( InputButton.Attack2 ) == true && !IsInSprint;
+
+		if (CrosshairPanel != null) {
+			CrosshairPanel.Style.Opacity = !IsAiming ? 1f : 0f;
 		}
 	}
 
@@ -203,12 +221,21 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 			//
 			using ( Prediction.Off() )
 			{
-				var damageInfo = DamageInfo.FromBullet( tr.EndPos, forward * 100 * force, damage )
-					.UsingTraceResult( tr )
-					.WithAttacker( Owner )
-					.WithWeapon( this );
+				// var damageInfo = DamageInfo.FromBullet( tr.EndPos, forward * 100 * force, damage )
+				// 	.UsingTraceResult( tr )
+				// 	.WithAttacker( Owner )
+				// 	.WithWeapon( this );
 
-				tr.Entity.TakeDamage( damageInfo );
+				// tr.Entity.TakeDamage( damageInfo );
+
+
+				Explosion.Create(this)
+					.At(tr.EndPos + tr.Normal)
+					.WithDamage(10f)
+					.WithRadius(150f)
+					.WithForce(250f)
+					.Explode();
+				
 			}
 		}
 	}
@@ -235,11 +262,15 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		if ( string.IsNullOrEmpty( ViewModelPath ) )
 			return;
 
-		ViewModelEntity = new HeistViewModel();
-		ViewModelEntity.Position = Position;
-		ViewModelEntity.Owner = Owner;
-		ViewModelEntity.EnableViewmodelRendering = true;
-		ViewModelEntity.SetModel( ViewModelPath );
+		var vm = new HeistViewModel();
+
+		vm.Weapon = this;
+		vm.Position = Position;
+		vm.Owner = Owner;
+		vm.EnableViewmodelRendering = true;
+		vm.SetModel( ViewModelPath );
+
+		ViewModelEntity = vm;
 	}
 
 	public override void CreateHudElements()

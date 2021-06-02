@@ -13,7 +13,7 @@ partial class Grenade : BaseHeistWeapon
 	{
 		base.Spawn();
 
-		AmmoClip = 1;
+		AmmoClip = 100;
 		SetModel( "weapons/rust_pistol/rust_pistol.vmdl" );
 	}
 
@@ -37,7 +37,7 @@ partial class Grenade : BaseHeistWeapon
 					Owner = Owner
 				};
 
-				grenade.Shoot( Owner.EyeRot.Forward, Owner.Velocity );
+				grenade.Shoot( this, Owner.EyeRot.Forward, Owner.Velocity );
 			}
 	}
 

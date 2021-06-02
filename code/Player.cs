@@ -34,7 +34,7 @@ partial class HeistPlayer : Player
 		SupressPickupNotices = true;
 
 		Inventory.Add( new Pistol(), true );
-		Inventory.Add( new Grenade());
+		Inventory.Add( new Grenade(), true);
 		Inventory.Add( new Shotgun() );
 		Inventory.Add( new SMG() );
 		Inventory.Add( new Crossbow() );
@@ -206,8 +206,17 @@ partial class HeistPlayer : Player
 		// setup.Rotation *= Rotation.From( 0, 0, appliedLean );
 
 		speed = (speed - 0.7f).Clamp( 0, 1 ) * 3.0f;
+		
+		float aimZoom = 0;
 
-		fov = fov.LerpTo( speed * 20 * MathF.Abs( forwardspeed ), Time.Delta * 2.0f );
+		if ( ActiveChild is BaseHeistWeapon weapon && !weapon.IsAiming)
+		{
+			aimZoom = 20;
+		}
+
+		// fov = fov.LerpTo( speed * 20 * MathF.Abs( forwardspeed ) - aimZoom, Time.Delta * 2.0f );
+
+		fov = fov.LerpTo( aimZoom, Time.Delta * 10.0f );
 
 		setup.FieldOfView += fov;
 
@@ -255,7 +264,7 @@ partial class HeistPlayer : Player
 	[ClientRpc]
 	public void TookDamage( Vector3 pos )
 	{
-		//DebugOverlay.Sphere( pos, 5.0f, Color.Red, false, 50.0f );
+		// DebugOverlay.Sphere( pos, 5.0f, Color.Red, false, 50.0f );
 
 		DamageIndicator.Current?.OnHit( pos );
 	}
