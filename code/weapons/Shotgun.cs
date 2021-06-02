@@ -92,7 +92,7 @@ partial class Shotgun : BaseHeistWeapon
 			new Sandbox.ScreenShake.Perlin(1.0f, 1.5f, 2.0f);
 		}
 
-		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -50.5f + Vector3.Left * -1.5f + Vector3.Up * -10f);
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -50.5f + Vector3.Left * -1.5f + Vector3.Up * 2f);
 
 		CrosshairPanel?.OnEvent( "fire" );
 	}
