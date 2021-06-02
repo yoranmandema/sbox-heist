@@ -27,10 +27,6 @@ partial class Explosion
 			if (root is Player playerEnt) {
 				tr = DoExplosionTrace(instigator, position, playerEnt.EyePos );
 			}
-			// Trace to root bone if entity is AnimEntity
-			else if (root is AnimEntity animEnt) {
-				tr = DoExplosionTrace(instigator, position, animEnt.Root.Position );
-			} 
 			// Apply force if entity has physics body
 			else if (root is ModelEntity modelEnt && modelEnt.PhysicsBody.IsValid()) {
 				tr = DoExplosionTrace(instigator, position, modelEnt.PhysicsBody.MassCenter);

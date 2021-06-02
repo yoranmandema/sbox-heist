@@ -18,7 +18,14 @@ partial class Shotgun : BaseHeistWeapon
 
 		SetModel( "weapons/rust_pumpshotgun/rust_pumpshotgun.vmdl" );  
 
+
 		AmmoClip = 6;
+	}
+
+	public override void CreateViewModel () {
+		base.CreateViewModel();
+
+		(ViewModelEntity as HeistViewModel).AimOffset = new Vector3( -4f, 18.9f, 2.8f );
 	}
 
 	public override void AttackPrimary() 
@@ -51,6 +58,8 @@ partial class Shotgun : BaseHeistWeapon
 
 	public override void AttackSecondary()
 	{
+		return;
+
 		TimeSincePrimaryAttack = -0.5f;
 		TimeSinceSecondaryAttack = -0.5f;
 

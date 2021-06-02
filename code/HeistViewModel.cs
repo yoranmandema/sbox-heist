@@ -6,7 +6,6 @@ partial class HeistViewModel : BaseViewModel
 {
 	float walkBob = 0;
 	Vector3 velocity;
-	Vector3 force;
 	Vector3 acceleration;
 	float MouseScale => 1.5f;
 	float ReturnForce => 400f;
@@ -24,6 +23,7 @@ partial class HeistViewModel : BaseViewModel
 	Vector3 WalkCycleOffsets => new Vector3( 50f, 20f, 20f );
 	float ForwardBobbing => 3f;
 	float SideWalkOffset => 80f;
+	public Vector3 AimOffset {get; set;} =  new Vector3( 10f, 16.9f, 2.8f );
 	Vector3 Offset => new Vector3( 1f, 13f, -8f );
 	Vector3 CrouchOffset => new Vector3( -10f, -50f, -0f );
 	Vector3 SmoothedVelocity;
@@ -35,6 +35,7 @@ partial class HeistViewModel : BaseViewModel
 	float avoidance = 0;
 
 	float sprintLerp = 0;
+	float aimLerp = 0;
 
 	public HeistViewModel()
 	{
@@ -45,6 +46,7 @@ partial class HeistViewModel : BaseViewModel
 	{
 		base.PostCameraSetup( ref camSetup );
 
+
 		AddCameraEffects( ref camSetup );
 	}
 
@@ -52,6 +54,7 @@ partial class HeistViewModel : BaseViewModel
 	{
 		SmoothedVelocity += (Owner.Velocity - SmoothedVelocity) * 5f * Time.Delta;
 
+		var camTransform = new Transform(Owner.EyePos, Owner.EyeRot);
 		var speed = Owner.Velocity.Length.LerpInverse( 0, 320 );
 		var bobSpeed = SmoothedVelocity.Length.LerpInverse( -100, 320 );
 		var left = camSetup.Rotation.Left;
@@ -67,6 +70,12 @@ partial class HeistViewModel : BaseViewModel
 
 		LerpTowards( ref avoidance, avoidanceTrace.Hit ? (1f - avoidanceTrace.Fraction) : 0, 10f );
 		LerpTowards( ref sprintLerp, walkController?.Input.Down( InputButton.Run ) == true ? 1 : 0, 8f );
+		LerpTowards( ref aimLerp, walkController?.Input.Down( InputButton.Attack2 ) == true ? 1 : 0, 16f );
+
+		SetAnimBool("idle_aim", walkController?.Input.Down( InputButton.Attack2 ) == true);
+		SetAnimBool("idle", false);
+
+		DebugOverlay.ScreenText(new Vector2(100,300), 4, Color.White, $"{GetAttachment("muzzle",true).Position}");
 
 		bobSpeed *= (1 - sprintLerp * 0.25f);
 
@@ -84,7 +93,7 @@ partial class HeistViewModel : BaseViewModel
 
 		if ( walkController?.Duck?.IsActive == true )
 		{
-			acceleration += CrouchOffset * Time.Delta;
+			acceleration += CrouchOffset * Time.Delta * (1-aimLerp);
 		}
 
 		walkBob %= 360;
@@ -96,8 +105,8 @@ partial class HeistViewModel : BaseViewModel
 
 		noisePos += Time.Delta * NoiseSpeed;
 
-		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * Time.Delta * MouseScale;
-		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * Time.Delta * MouseScale;
+		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * Time.Delta * MouseScale  * (1f-aimLerp * 2f);
+		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * Time.Delta * MouseScale  * (1f-aimLerp * 2f);
 		acceleration += -velocity * ReturnForce * Time.Delta;
 
 		// Apply horizontal offsets based on walking direction
@@ -109,43 +118,45 @@ partial class HeistViewModel : BaseViewModel
 		acceleration += Vector3.Left * WalkCycle( 0.5f, 2f ) * speed * WalkCycleOffsets.y * (1 + sprintLerp) * Time.Delta;
 		acceleration += Vector3.Up * WalkCycle( 0.5f, 2f, true ) * speed * WalkCycleOffsets.z * Time.Delta;
 
-		acceleration += left.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Left * speed * SideWalkOffset * Time.Delta;
+		acceleration += left.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Left * speed * SideWalkOffset * Time.Delta * (1-aimLerp);
 
 		velocity += acceleration * Time.Delta;
 
 		ApplyDamping( ref acceleration, AccelDamping );
 
-		ApplyDamping( ref velocity, Damping );
+		ApplyDamping( ref velocity, Damping * (1 + aimLerp));
 
 		acceleration += new Vector3(
 			Noise.Perlin( noisePos, 0f, noiseZ ),
 			Noise.Perlin( noisePos, 10f, noiseZ ),
 			Noise.Perlin( noisePos, 20f, noiseZ )
-		) * NoiseScale * Time.Delta;
+		) * NoiseScale * Time.Delta * (1-aimLerp * 0.9f);
 
 		velocity = velocity.Normal * Math.Clamp( velocity.Length, 0, VelocityClamp );
 
 		Rotation desiredRotation = Local.Pawn.EyeRot;
-		desiredRotation *= Rotation.FromAxis(Vector3.Up, velocity.y * RotationScale);
-		desiredRotation *= Rotation.FromAxis(Vector3.Forward, -velocity.y * RotationScale - 10f);
-		desiredRotation *= Rotation.FromAxis(Vector3.Right, velocity.z * RotationScale);
+		desiredRotation *= Rotation.FromAxis(Vector3.Up, velocity.y * RotationScale* (1-aimLerp));
+		desiredRotation *= Rotation.FromAxis(Vector3.Forward, -velocity.y * RotationScale* (1-aimLerp) - 10f * (1-aimLerp));
+		desiredRotation *= Rotation.FromAxis(Vector3.Right, velocity.z * RotationScale* (1-aimLerp));
 
 		Rotation = desiredRotation;
 
-		Position += forward * (velocity.x * VelocityScale + Offset.x);
-		Position += left * (velocity.y * VelocityScale + Offset.y);
-		Position += up * (velocity.z * VelocityScale + Offset.z + upDownOffset + avoidance * -10);
+		var desiredOffset = Vector3.Lerp(Offset, AimOffset, aimLerp);
+
+		Position += forward * (velocity.x * VelocityScale + desiredOffset.x);
+		Position += left * (velocity.y * VelocityScale + desiredOffset.y);
+		Position += up * (velocity.z * VelocityScale + desiredOffset.z + upDownOffset * (1-aimLerp));
 
 		Position += (desiredRotation.Forward - camSetup.Rotation.Forward) * -PivotForce;
 
 		// Apply sprinting / avoidance offsets
 		var offsetLerp = MathF.Max(sprintLerp, avoidance);
 
-		Rotation *= Rotation.FromAxis(Vector3.Up, velocity.y * (sprintLerp * 40f) + offsetLerp * 30f);
+		Rotation *= Rotation.FromAxis(Vector3.Up, velocity.y * (sprintLerp * 40f) + offsetLerp * 30f   * (1-aimLerp));
 
 		Position += forward * avoidance;
-		Position += left * (velocity.y * sprintLerp * -50f + offsetLerp * -10f);
-		Position += up * (offsetLerp * -0f);
+		Position += left * (velocity.y * sprintLerp * -50f + offsetLerp * -10f   * (1-aimLerp));
+		Position += up * (offsetLerp * -0f  + avoidance * -10   * (1-aimLerp));
 	}
 
 	private float WalkCycle( float speed, float power, bool abs = false )

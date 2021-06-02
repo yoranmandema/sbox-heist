@@ -20,6 +20,12 @@ partial class SMG : BaseHeistWeapon
 		AmmoClip = 20;
 	}
 
+	public override void CreateViewModel () {
+		base.CreateViewModel();
+
+		(ViewModelEntity as HeistViewModel).AimOffset = new Vector3( -4f, 18.3f, 2.8f );
+	}
+
 	public override void AttackPrimary()
 	{
 		TimeSincePrimaryAttack = 0;

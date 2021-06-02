@@ -8,10 +8,10 @@ partial class GrenadeProjectile : ModelEntity
 {
 
 	public float Size => 3f;
-	public float Bounce => 0.5f;
+	public float Bounce => 1f;
 
 	public float BounceThreshold => 250f;
-	public float RollDrag = 1f;
+	public float RollDrag = 1.5f;
 
 	public float FuseTime => 5f;
 	public float InitialVelocity => 1000f;
@@ -92,15 +92,21 @@ partial class GrenadeProjectile : ModelEntity
 
 		if ( tr.Hit )
 		{
-			DebugOverlay.Text(tr.EndPos, $"{Vector3.Reflect( SimVelocity.Normal, tr.Normal ).Dot(tr.Normal)}", Color.Cyan, 5f);
+			DebugOverlay.Text(tr.EndPos, $"{tr.Surface.Elasticity}", Color.Cyan, 5f);
 
 			DebugOverlay.Line( tr.EndPos, tr.EndPos + Vector3.Reflect( SimVelocity.Normal, tr.Normal ) * 10f, Color.Cyan, 5f );
 
-			if ( (SimVelocity.Length < System.MathF.Max(tr.Surface.BounceThreshold, BounceThreshold)) && !IsRolling )
+			bool canRoll = SimVelocity.Length < System.MathF.Max(tr.Surface.BounceThreshold, BounceThreshold);
+			canRoll = canRoll || (Vector3.Reflect( SimVelocity.Normal, tr.Normal ).Dot(tr.Normal) < 0.35f && tr.Normal.z > 0.1f);
+
+
+			if ( canRoll && !IsRolling )
 			{
 				IsRolling = true;
 
-				SimVelocity = Vector3.VectorPlaneProject(SimVelocity, tr.Normal);
+				var projectedVel = Vector3.VectorPlaneProject(SimVelocity, tr.Normal);
+
+				SimVelocity = projectedVel * projectedVel.Normal.Dot(SimVelocity.Normal);
 			} else {
 				DoBounce( tr );
 
@@ -135,7 +141,7 @@ partial class GrenadeProjectile : ModelEntity
 
 	private void DoBounce( TraceResult tr )
 	{
-		SimVelocity = Vector3.Reflect( SimVelocity, tr.Normal ) * Bounce;
+		SimVelocity = Vector3.Reflect( SimVelocity, tr.Normal ) * ((Bounce + tr.Surface.Elasticity)/ 2f);
 
 		Position = tr.EndPos + tr.Normal * Size * 0.5f ;
 	}
@@ -165,11 +171,14 @@ partial class GrenadeProjectile : ModelEntity
 
 		var simVel = SimVelocity;
 
-		ApplyDamping(ref simVel, RollDrag);
+		ApplyDamping(ref simVel, RollDrag * groundTrace.Surface.Friction);
 
 		SimVelocity = simVel;
 
 		DebugOverlay.Line( groundTrace.EndPos, groundTrace.EndPos + SimVelocity, Color.Orange, 0 );
+
+		DebugOverlay.Text(groundTrace.EndPos, $"{groundTrace.Surface.Friction}", Color.Orange, 5f);
+
 	}
 
 	public void DoExplosion( Vector3 position )
