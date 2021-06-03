@@ -91,6 +91,8 @@ partial class HeistViewModel : BaseViewModel
 		LerpTowards( ref aimLerp, Weapon.IsAiming ? 1 : 0, 16f );
 		LerpTowards( ref upDownOffset, speed * -LookUpSpeedScale + camSetup.Rotation.Forward.z * -LookUpPitchScale, LookUpPitchScale );
 
+		FieldOfView = 80f * (1- aimLerp) + 40f * aimLerp;
+
 		bobSpeed *= (1 - sprintLerp * 0.25f);
 
 		if ( Owner.GroundEntity != null )
@@ -114,8 +116,8 @@ partial class HeistViewModel : BaseViewModel
 
 		noisePos += DeltaTime * NoiseSpeed;
 
-		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * DeltaTime * MouseScale  * (1f-aimLerp * 2f);
-		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * DeltaTime * MouseScale  * (1f-aimLerp * 2f);
+		acceleration += Vector3.Left * -Local.Client.Input.MouseDelta.x * DeltaTime * MouseScale * 0.5f   * (1f-aimLerp * 2f);
+		acceleration += Vector3.Up * -Local.Client.Input.MouseDelta.y * DeltaTime * MouseScale * (1f-aimLerp * 2f);
 		acceleration += -velocity * ReturnForce * DeltaTime;
 
 		// Apply horizontal offsets based on walking direction
