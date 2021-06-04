@@ -221,20 +221,20 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 			//
 			using ( Prediction.Off() )
 			{
-				// var damageInfo = DamageInfo.FromBullet( tr.EndPos, forward * 100 * force, damage )
-				// 	.UsingTraceResult( tr )
-				// 	.WithAttacker( Owner )
-				// 	.WithWeapon( this );
+				var damageInfo = DamageInfo.FromBullet( tr.EndPos, forward * 100 * force, damage )
+					.UsingTraceResult( tr )
+					.WithAttacker( Owner )
+					.WithWeapon( this );
 
-				// tr.Entity.TakeDamage( damageInfo );
+				tr.Entity.TakeDamage( damageInfo );
 
 
-				Explosion.Create(this)
-					.At(tr.EndPos + tr.Normal)
-					.WithDamage(10f)
-					.WithRadius(150f)
-					.WithForce(250f)
-					.Explode();
+				// Explosion.Create(this)
+				// 	.At(tr.EndPos + tr.Normal)
+				// 	.WithDamage(10f)
+				// 	.WithRadius(150f)
+				// 	.WithForce(250f)
+				// 	.Explode();
 				
 			}
 		}

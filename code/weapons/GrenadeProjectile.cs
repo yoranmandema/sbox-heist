@@ -8,7 +8,7 @@ partial class GrenadeProjectile : ModelEntity
 {
 
 	public float Size => 3f;
-	public float Bounce => 1f;
+	public float Bounce => 0.1f;
 
 	public float BounceThreshold => 250f;
 
@@ -25,11 +25,11 @@ partial class GrenadeProjectile : ModelEntity
 	public float ImpactDamageThreshold => 350f;
 
 	public float ExplosionRadius => 150f;
-	public float ExplosionForce = 2500f;
+	public float ExplosionForce => 1000f;
 
 	[Net] public bool IsRolling { get; set; }
 
-	[Net] public Vector3 SimVelocity { get; set; }
+	// [Net] public Vector3 Velocity { get; set; }
 
 	[Net] public Vector3 Direction { get; set; } = Vector3.Forward;
 	[Net] public bool IsSimulating { get; set; } = true;
@@ -59,7 +59,7 @@ partial class GrenadeProjectile : ModelEntity
 
 		Direction = Direction.Normal;
 
-		SimVelocity = Direction * InitialVelocity + ownerVelocity;
+		Velocity = Direction * InitialVelocity + ownerVelocity;
 
 		lastPosition = Position;
 
@@ -74,7 +74,7 @@ partial class GrenadeProjectile : ModelEntity
 
 		if ( IsSimulating && !IsRolling )
 		{
-			SimVelocity += PhysicsWorld.Gravity * Time.Delta;
+			Velocity += PhysicsWorld.Gravity * Time.Delta;
 		}
 
 		currentPosition = Position;
@@ -85,7 +85,7 @@ partial class GrenadeProjectile : ModelEntity
 		}
 
 		var start = Position;
-		var end = start + SimVelocity * Time.Delta;
+		var end = start + Velocity * Time.Delta;
 
 		var tr = Trace.Ray( start, end )
 				.UseHitboxes()
@@ -98,17 +98,17 @@ partial class GrenadeProjectile : ModelEntity
 
 		if ( tr.Hit )
 		{
-			bool canRoll = SimVelocity.Length < System.MathF.Max(tr.Surface.BounceThreshold, BounceThreshold);
-			canRoll = canRoll || (Vector3.Reflect( SimVelocity.Normal, tr.Normal ).Dot(tr.Normal) < 0.35f && tr.Normal.z > 0.1f);
+			bool canRoll = Velocity.Length < System.MathF.Max(tr.Surface.BounceThreshold, BounceThreshold);
+			canRoll = canRoll || (Vector3.Reflect( Velocity.Normal, tr.Normal ).Dot(tr.Normal) < 0.35f && tr.Normal.z > 0.1f);
 
 
 			if ( canRoll && !IsRolling )
 			{
 				IsRolling = true;
 
-				var projectedVel = Vector3.VectorPlaneProject(SimVelocity, tr.Normal);
+				var projectedVel = Vector3.VectorPlaneProject(Velocity, tr.Normal);
 
-				SimVelocity = projectedVel * projectedVel.Normal.Dot(SimVelocity.Normal);
+				Velocity = projectedVel * projectedVel.Normal.Dot(Velocity.Normal);
 			} else {
 
 				DoImpactDamage ( tr );
@@ -144,7 +144,7 @@ partial class GrenadeProjectile : ModelEntity
 
 	private void DoImpactDamage ( TraceResult tr ) {
 		if (!tr.Entity.IsValid()) return;
-		if (SimVelocity.Length < ImpactDamageThreshold) return;
+		if (Velocity.Length < ImpactDamageThreshold) return;
 
 		var damageInfo = DamageInfo.Generic(ImpactDamage)
 			.UsingTraceResult( tr )
@@ -163,7 +163,7 @@ partial class GrenadeProjectile : ModelEntity
 			appliedBounce = PlayerBounce;
 		}
 
-		SimVelocity = Vector3.Reflect( SimVelocity, tr.Normal ) * appliedBounce;
+		Velocity = Vector3.Reflect( Velocity, tr.Normal ) * appliedBounce;
 
 		Position = tr.EndPos + tr.Normal * Size * 0.5f ;
 	}
@@ -185,22 +185,22 @@ partial class GrenadeProjectile : ModelEntity
 		}
 
 
-		SimVelocity = Vector3.VectorPlaneProject(SimVelocity, groundTrace.Normal);
+		Velocity = Vector3.VectorPlaneProject(Velocity, groundTrace.Normal);
 
-		SimVelocity += Vector3.VectorPlaneProject(PhysicsWorld.Gravity, groundTrace.Normal) * Time.Delta;
+		Velocity += Vector3.VectorPlaneProject(PhysicsWorld.Gravity, groundTrace.Normal) * Time.Delta;
 
-		var simVel = SimVelocity;
+		var simVel = Velocity;
 
 		ApplyDamping(ref simVel, RollDrag * groundTrace.Surface.Friction);
 
-		SimVelocity = simVel;
+		Velocity = simVel;
 	}
 
 	public void DoExplosion( Vector3 position )
 	{
 		Explosion.Create(WeaponEntity)
 			.At(position)
-			.WithDamage(Damage)
+			.WithDamage(25f)
 			.WithRadius(ExplosionRadius)
 			.WithForce(ExplosionForce)
 			.Explode();

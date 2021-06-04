@@ -34,6 +34,10 @@ partial class HeistViewModel : BaseViewModel
 	float noisePos = 0;
 	float upDownOffset = 0;
 	float avoidance = 0;
+	float avoidanceLeftDot;
+	float avoidanceUpDot;
+	
+	Rotation avoidanceNormalRotation;
 
 	float sprintLerp = 0;
 	float aimLerp = 0;
@@ -67,9 +71,6 @@ partial class HeistViewModel : BaseViewModel
 	{
 		SmoothDeltaTime();
 
-		DebugOverlay.ScreenText(new Vector2(100,400),0, Color.White, $"Smoothed delta: {DeltaTime}", 0);
-		DebugOverlay.ScreenText(new Vector2(100,400),1, Color.White, $"Delta: {Time.Delta}", 0);
-
 		SmoothedVelocity += (Owner.Velocity - SmoothedVelocity) * 5f * DeltaTime;
 
 		var camTransform = new Transform(Owner.EyePos, Owner.EyeRot);
@@ -84,11 +85,22 @@ partial class HeistViewModel : BaseViewModel
 						.UseHitboxes()
 						.Ignore( Owner )
 						.Ignore( this )
+						.Size(2)
 						.Run();
 
-		LerpTowards( ref avoidance, avoidanceTrace.Hit ? (1f - avoidanceTrace.Fraction) : 0, 10f );
+		var desiredAvoidanceNormal = -forward;
+
+		if (avoidanceTrace.Hit) {
+			desiredAvoidanceNormal = avoidanceTrace.Normal;
+		}
+
+		avoidanceNormalRotation = Rotation.Slerp(avoidanceNormalRotation, Rotation.LookAt(desiredAvoidanceNormal, Vector3.Up), 10 * Time.Delta);
+
+		var avoidanceNormal = avoidanceNormalRotation.Forward;
+
+		LerpTowards( ref avoidance, avoidanceTrace.Hit ? (1f - avoidanceTrace.Fraction) : 0, 4f );
 		LerpTowards( ref sprintLerp, Weapon.IsInSprint ? 1 : 0, 8f );
-		LerpTowards( ref aimLerp, Weapon.IsAiming ? 1 : 0, 16f );
+		LerpTowards( ref aimLerp, Weapon.IsAiming ? 1 : 0, 12f );
 		LerpTowards( ref upDownOffset, speed * -LookUpSpeedScale + camSetup.Rotation.Forward.z * -LookUpPitchScale, LookUpPitchScale );
 
 		FieldOfView = 80f * (1- aimLerp) + 40f * aimLerp;
@@ -163,11 +175,23 @@ partial class HeistViewModel : BaseViewModel
 		// Apply sprinting / avoidance offsets
 		var offsetLerp = MathF.Max(sprintLerp, avoidance);
 
-		Rotation *= Rotation.FromAxis(Vector3.Up, velocity.y * (sprintLerp * 40f) + offsetLerp * 30f   * (1-aimLerp));
+		var avoidanceUp = Vector3.VectorPlaneProject(Vector3.Up, avoidanceNormal).Normal;
 
-		Position += forward * avoidance;
-		Position += left * (velocity.y * sprintLerp * -50f + offsetLerp * -10f   * (1-aimLerp));
-		Position += up * (offsetLerp * -0f  + avoidance * -10   * (1-aimLerp));
+		if (Vector3.Up.Dot(avoidanceNormal) > 0.5f) {
+			avoidanceUp = -avoidanceNormal;
+		}
+
+		var avoidanceLeft = Vector3.VectorPlaneProject(left, avoidanceNormal).Normal;
+
+		LerpTowards( ref avoidanceLeftDot, forward.Dot(avoidanceLeft), 4f );
+		LerpTowards( ref avoidanceUpDot, forward.Dot(avoidanceUp) * (1f - 2 * MathF.Abs(-avoidanceLeftDot)), 4f );
+
+		Rotation *= Rotation.FromAxis(Vector3.Up, velocity.y * (sprintLerp * 30f) + (sprintLerp + avoidance * avoidanceLeftDot * (1-sprintLerp)) * 50f   * (1-aimLerp));
+		Rotation *= Rotation.FromAxis(Vector3.Right, avoidance * 50f * avoidanceUpDot  * (1-aimLerp));
+
+		Position += forward * (sprintLerp * -10f + (MathF.Max(avoidance, avoidance * MathF.Max(MathF.Abs(avoidanceLeftDot),0.5f)) * -20f));
+		Position += left * ((velocity.y * -50f - 10) * sprintLerp + offsetLerp * 4f * -(avoidanceLeftDot + 0.25f)   * (1-aimLerp));
+		Position += up * (offsetLerp * -0f  + avoidance * avoidanceUpDot * -10 * (1-aimLerp));
 	}
 
 	private float WalkCycle( float speed, float power, bool abs = false )
