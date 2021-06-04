@@ -4,21 +4,21 @@ using System.Collections.Generic;
 
 partial class Explosion : AnimEntity
 {
-	[Net] public Entity Instigator {get; set;}
-	[Net] public float BaseDamage {get; set;} = 50f;
-	[Net] public float Force {get; set;} = 250f;
-	[Net] public float ShakeAmount {get; set;} = 3f;
-	[Net] public float ShakeDuration {get; set;} = 1f;
-	[Net] public float ShakeDistance {get; set;} = 800f;
-	[Net] public float Radius {get; set;} = 150f;
-	[Net] public Vector3 TargetPosition {get; set;}
+	public Entity Instigator {get; set;}
+	public float BaseDamage {get; set;} = 50f;
+	public float Force {get; set;} = 500f;
+	public float ShakeAmount {get; set;} = 3f;
+	public float ShakeDuration {get; set;} = 1f;
+	public float ShakeDistance {get; set;} = 800f;
+	public float Radius {get; set;} = 150f;
 
     public static Explosion Create (Entity instigator) {
 		Host.AssertServer();
 
-		var explosion = new Explosion();
-
-		explosion.Instigator = instigator;
+		var explosion = new Explosion
+		{
+			Instigator = instigator
+		};
 
 		return explosion;        
     }
@@ -62,7 +62,7 @@ partial class Explosion : AnimEntity
 		var i = 0;
 		var realEndPos = startPos + (end - startPos).Normal * Radius;
 
-		TraceResult tr = default;
+		TraceResult tr;
 		Entity lastEnt = null;
 
 		while (startPos != realEndPos && i < maxIterations) {

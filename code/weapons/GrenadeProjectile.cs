@@ -200,7 +200,7 @@ partial class GrenadeProjectile : ModelEntity
 	{
 		Explosion.Create(WeaponEntity)
 			.At(position)
-			.WithDamage(25f)
+			.WithDamage(Damage)
 			.WithRadius(ExplosionRadius)
 			.WithForce(ExplosionForce)
 			.Explode();
