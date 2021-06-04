@@ -60,11 +60,56 @@ partial class Explosion : AnimEntity
 		return this;
 	}
 
-    private TraceResult DoExplosionTrace (Vector3 start, Vector3 end) {
-		return Trace.Ray( start, end )
-			.UseHitboxes()
-			// .Ignore( Instigator )
-			.Run();
+    // private TraceResult DoExplosionTrace (Vector3 start, Vector3 end) {
+	// 	return Trace.Ray( start, end )
+	// 		.UseHitboxes()
+	// 		// .Ignore( Instigator )
+	// 		.Run();
+	// }
+
+	public virtual IEnumerable<TraceResult> DoExplosionTrace( Vector3 end)
+	{
+		var startPos = Position;
+		var maxIterations = 10f;
+		var i = 0;
+		var realEndPos = startPos + (end - startPos).Normal * Radius;
+
+		TraceResult tr = default;
+		Entity lastEnt = null;
+
+		while (startPos != realEndPos && i < maxIterations) {
+			tr = Trace.Ray( startPos, realEndPos )
+					.UseHitboxes()
+					.Ignore(lastEnt)
+					.Run();
+
+			var isValid = tr.Entity.IsValid();
+			
+			// Ignore trace  if we did not hit an entity or if we hit the world
+			if (!tr.Hit || !isValid || (isValid && tr.Entity.IsWorld)) {					
+				break;
+			}
+
+			lastEnt = tr.Entity;
+			startPos = tr.EndPos;
+			i++;
+
+			yield return tr;
+		}
+	}
+
+	public static Vector3 NearestPointOnLine(Vector3 start, Vector3 end, Vector3 point)
+	{
+
+		var lineDir = (end - start).Normal;
+		var v = point - start;
+		var d = System.Math.Clamp(lineDir.Dot(v), 0, start.Distance(end));
+		var linePos = start + lineDir * d;
+
+		DebugOverlay.Line(start,end, Color.Cyan, 10f);
+		DebugOverlay.Sphere(linePos, 5f, Color.Cyan, true, 10f);
+
+		return linePos;
 	}
 
 	[ServerCmd]
@@ -79,32 +124,36 @@ partial class Explosion : AnimEntity
 			// if (ent == Instigator) continue;
 			if (ent.IsWorld) continue;
 
-			TraceResult tr = default;
+			Vector3 traceEndPos = ent.EyePos;
 
-			Entity root = ent.Root ?? ent;
-
-			// Trace to EyePos if entity is Player
-			if (root is Player playerEnt) {
-				tr = DoExplosionTrace(Position, playerEnt.EyePos);
+			// Trace to closest point along player's torso/head region if entity is player
+			if (ent is Player playerEnt) {
+				traceEndPos = NearestPointOnLine(playerEnt.GetBoneTransform(playerEnt.GetBoneIndex("pelvis")).Position, playerEnt.GetBoneTransform(playerEnt.GetBoneIndex("head")).Position, Position);
 			}
 			// Apply force if entity has physics body
-			else if (root is ModelEntity modelEnt && modelEnt.PhysicsBody.IsValid()) {
-				tr = DoExplosionTrace(Position, modelEnt.PhysicsBody.MassCenter);
+			else if (ent is ModelEntity modelEnt && modelEnt.PhysicsBody.IsValid()) {
+				traceEndPos = modelEnt.PhysicsBody.MassCenter;
 			} 
-			else {
-				tr = DoExplosionTrace(Position, root.EyePos );
+
+			foreach (var trace in DoExplosionTrace(traceEndPos)) {
+				if (affectedEnts.Contains(trace.Entity)) continue;
+
+				var fraction = (Radius - trace.EndPos.Distance(Position)) / Radius;
+
+				var damageInfo = DamageInfo.Explosion(Position, trace.Direction * Force, BaseDamage * fraction)
+					.UsingTraceResult( trace )
+					.WithAttacker( Instigator.Owner )
+					.WithWeapon( Instigator );
+
+				trace.Entity.TakeDamage( damageInfo );
+
+				if (trace.Entity is Player ply) {
+					ply.Velocity += trace.Direction * fraction * Force / ply.PhysicsBody.Mass * 1000f;
+					Log.Info("Hit player!");
+				}
+
+				affectedEnts.Add(trace.Entity);
 			}
-
-			if (!tr.Entity.IsValid()) continue;
-
-			var damageInfo = DamageInfo.Explosion(tr.EndPos, tr.Direction * Force, BaseDamage * (1f - tr.Fraction))
-				.UsingTraceResult( tr )
-				.WithAttacker( Instigator.Owner )
-				.WithWeapon( Instigator );
-
-			tr.Entity.TakeDamage( damageInfo );
-
-			affectedEnts.Add(root);
 		}
 
 		DoEffects(Position);
