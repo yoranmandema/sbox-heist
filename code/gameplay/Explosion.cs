@@ -13,11 +13,6 @@ partial class Explosion : AnimEntity
 	[Net] public float Radius {get; set;} = 150f;
 	[Net] public Vector3 TargetPosition {get; set;}
 
-
-	public Explosion () {
-
-	}
-
     public static Explosion Create (Entity instigator) {
 		Host.AssertServer();
 
@@ -60,17 +55,10 @@ partial class Explosion : AnimEntity
 		return this;
 	}
 
-    // private TraceResult DoExplosionTrace (Vector3 start, Vector3 end) {
-	// 	return Trace.Ray( start, end )
-	// 		.UseHitboxes()
-	// 		// .Ignore( Instigator )
-	// 		.Run();
-	// }
-
 	public virtual IEnumerable<TraceResult> DoExplosionTrace( Vector3 end)
 	{
 		var startPos = Position;
-		var maxIterations = 10f;
+		var maxIterations = 3f;
 		var i = 0;
 		var realEndPos = startPos + (end - startPos).Normal * Radius;
 
@@ -100,14 +88,10 @@ partial class Explosion : AnimEntity
 
 	public static Vector3 NearestPointOnLine(Vector3 start, Vector3 end, Vector3 point)
 	{
-
 		var lineDir = (end - start).Normal;
 		var v = point - start;
 		var d = System.Math.Clamp(lineDir.Dot(v), 0, start.Distance(end));
 		var linePos = start + lineDir * d;
-
-		DebugOverlay.Line(start,end, Color.Cyan, 10f);
-		DebugOverlay.Sphere(linePos, 5f, Color.Cyan, true, 10f);
 
 		return linePos;
 	}
@@ -121,8 +105,7 @@ partial class Explosion : AnimEntity
 		var affectedEnts = new List<Entity>(ents.Count);
 
 		foreach (var ent in ents) {
-			// if (ent == Instigator) continue;
-			if (ent.IsWorld) continue;
+			if (ent == Instigator || ent.IsWorld) continue;
 
 			Vector3 traceEndPos = ent.EyePos;
 
@@ -130,12 +113,14 @@ partial class Explosion : AnimEntity
 			if (ent is Player playerEnt) {
 				traceEndPos = NearestPointOnLine(playerEnt.GetBoneTransform(playerEnt.GetBoneIndex("pelvis")).Position, playerEnt.GetBoneTransform(playerEnt.GetBoneIndex("head")).Position, Position);
 			}
-			// Apply force if entity has physics body
+			// Trace to mass center if entity has a physics body
 			else if (ent is ModelEntity modelEnt && modelEnt.PhysicsBody.IsValid()) {
 				traceEndPos = modelEnt.PhysicsBody.MassCenter;
 			} 
 
 			foreach (var trace in DoExplosionTrace(traceEndPos)) {
+
+				// Skip entity if we already affected it
 				if (affectedEnts.Contains(trace.Entity)) continue;
 
 				var fraction = (Radius - trace.EndPos.Distance(Position)) / Radius;
@@ -147,9 +132,9 @@ partial class Explosion : AnimEntity
 
 				trace.Entity.TakeDamage( damageInfo );
 
+				// Apply force to player
 				if (trace.Entity is Player ply) {
 					ply.Velocity += trace.Direction * fraction * Force / ply.PhysicsBody.Mass * 1000f;
-					Log.Info("Hit player!");
 				}
 
 				affectedEnts.Add(trace.Entity);
@@ -158,7 +143,7 @@ partial class Explosion : AnimEntity
 
 		DoEffects(Position);
 
-		DeleteAsync(10f);
+		DeleteAsync(1f);
 	}
 
 	[ClientRpc]
