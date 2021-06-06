@@ -46,11 +46,6 @@ partial class Grenade : BaseHeistWeapon
 	{
 		Host.AssertClient();
 
-		// if (Owner == Local.Pawn)
-		// {
-		//     new Sandbox.ScreenShake.Perlin(0.5f, 4.0f, 1.0f, 0.5f);
-		// }
-
 		ViewModelEntity?.SetAnimBool( "fire", true );
 
 		(ViewModelEntity as HeistViewModel)?.ApplyImpulse( Vector3.Forward * -50.5f );
