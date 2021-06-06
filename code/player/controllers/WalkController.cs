@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Sandbox;
 
 [Library]
-public class WalkController : BasePlayerController
+public class WalkController : PlayerController
 {
     public float SprintSpeed { get; set; } = 220.0f;
     public float WalkSpeed { get; set; } = 80.0f;
@@ -101,6 +101,8 @@ public class WalkController : BasePlayerController
 
     public override void Simulate()
     {
+        base.Simulate();
+
         EyePosLocal = Vector3.Up * (EyeHeight * Pawn.Scale);
         UpdateBBox();
 

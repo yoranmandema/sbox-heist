@@ -9,13 +9,13 @@ using System.Threading.Tasks;
 using Sandbox;
 
 [Library]
-public class Duck : NetworkComponent
+public class Duck : PlayerController
 {
-    public BasePlayerController Controller;
+    public PlayerController Controller;
 
     public bool IsActive; // replicate
 
-    public Duck(BasePlayerController controller)
+    public Duck(PlayerController controller)
     {
         Controller = controller;
     }

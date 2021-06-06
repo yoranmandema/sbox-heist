@@ -16,26 +16,17 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public virtual int BucketWeight => 100;
 	public virtual float SprintOutTime => 0.5f;
 
-	[Net, Predicted]
-	public int AmmoClip { get; set; }
+	[Net, Predicted] public int AmmoClip { get; set; }
+	[Net, Predicted] public TimeSince TimeSinceReload { get; set; }
+	[Net, Predicted] public bool IsReloading { get; set; }
+	
+	public PlayerController Controller => (Owner as HeistPlayer).Controller as PlayerController;
 
-	[Net, Predicted]
-	public TimeSince TimeSinceReload { get; set; }
-
-	[Net, Predicted]
-	public bool IsReloading { get; set; }
-
-	[Net, Predicted]
-	public bool IsAiming { get; set; }
-
-	[Net, Predicted]
-	public bool IsInSprint { get; set; }
-
-	[Net, Predicted]
-	public TimeSince TimeSinceDeployed { get; set; }
-
-	[Net, Predicted]
-	public TimeSince TimeSinceSprint { get; set; }
+	[Net] public bool IsAiming => Controller.IsAiming;
+	[Net] public bool IsInSprint => Controller.IsInSprint;
+	[Net] public bool IsLeaning => Controller.IsLeaning;
+	[Net, Predicted] public TimeSince TimeSinceDeployed { get; set; }
+	[Net, Predicted] public TimeSince TimeSinceSprint { get; set; }
 
 	public PickupTrigger PickupTrigger { get; protected set; }
 
@@ -106,14 +97,11 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 			OnReloadFinish();
 		}
 
-		IsInSprint = owner.Input?.Down( InputButton.Run ) == true;
-
-		IsAiming = owner.Input?.Down( InputButton.Attack2 ) == true && !IsInSprint;
-
 		if (CrosshairPanel != null) {
 			CrosshairPanel.Style.Opacity = !IsAiming ? 1f : 0f;
 		}
 	}
+
 
 	public virtual void OnReloadFinish()
 	{
