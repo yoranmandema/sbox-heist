@@ -5,4 +5,4 @@ code/accesslist.txt
 .intermediate
 tools_asset_info.bin
 code/Properties/launchSettings.json
-heist.csproj
+code/sbox-heist.csproj
