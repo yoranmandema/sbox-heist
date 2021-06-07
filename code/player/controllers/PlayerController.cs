@@ -6,6 +6,7 @@ public partial class PlayerController : BasePlayerController {
     [Net, Predicted] public bool IsInSprint {get; set;}
     [Net, Predicted] public bool IsAiming {get; set;}
     [Net, Predicted] public bool IsLeaning {get; set;}
+    [Net, Predicted] public bool IsCrouching {get; set;}
 	[Net, Predicted] public Vector3 LeanDirection { get; set; }
 	[Net, Predicted] public float LeanDistance { get; set; }
 	[Net, Predicted] public Vector3 LeanNormal { get; set; }
@@ -95,8 +96,8 @@ public partial class PlayerController : BasePlayerController {
 			Vector3.Right
 		};
 
-		if (Pawn.Controller) {
-
+		if (IsCrouching) {
+			directions.Add(Vector3.Up);
 		}
 
 		var leanRadius = 15f;

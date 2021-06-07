@@ -35,6 +35,8 @@ public class Duck : PlayerController
             Controller.SetTag("ducked");
             Controller.EyePosLocal *= 0.5f;
         }
+
+        Controller.IsCrouching = IsActive; 
     }
 
     void TryDuck()
