@@ -20,11 +20,11 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	[Net, Predicted] public TimeSince TimeSinceReload { get; set; }
 	[Net, Predicted] public bool IsReloading { get; set; }
 	
-	public PlayerController Controller => (Owner as HeistPlayer).Controller as PlayerController;
+	public PlayerController Controller => (Owner as HeistPlayer)?.Controller as PlayerController;
 
-	[Net] public bool IsAiming => Controller.IsAiming;
-	[Net] public bool IsInSprint => Controller.IsInSprint;
-	[Net] public bool IsLeaning => Controller.IsLeaning;
+	[Net] public bool IsAiming => Controller?.IsAiming == true;
+	[Net] public bool IsInSprint => Controller?.IsInSprint == true;
+	[Net] public bool IsLeaning => Controller?.IsLeaning == true;
 	[Net, Predicted] public TimeSince TimeSinceDeployed { get; set; }
 	[Net, Predicted] public TimeSince TimeSinceSprint { get; set; }
 
@@ -250,12 +250,13 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		if ( string.IsNullOrEmpty( ViewModelPath ) )
 			return;
 
-		var vm = new HeistViewModel();
-
-		vm.Weapon = this;
-		vm.Position = Position;
-		vm.Owner = Owner;
-		vm.EnableViewmodelRendering = true;
+		var vm = new HeistViewModel
+		{
+			Weapon = this,
+			Position = Position,
+			Owner = Owner,
+			EnableViewmodelRendering = true
+		};
 		vm.SetModel( ViewModelPath );
 
 		ViewModelEntity = vm;

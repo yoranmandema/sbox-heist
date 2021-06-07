@@ -97,6 +97,7 @@ public class WalkController : PlayerController
         base.FrameSimulate();
 
         EyeRot = Input.Rotation;
+        EyeRot *= Rotation.From( 0, 0, -Lean * LeanDirection.y * 0.5f);
     }
 
     public override void Simulate()
@@ -104,6 +105,7 @@ public class WalkController : PlayerController
         base.Simulate();
 
         EyePosLocal = Vector3.Up * (EyeHeight * Pawn.Scale);
+
         UpdateBBox();
 
         EyePosLocal += TraceOffset;
@@ -199,6 +201,8 @@ public class WalkController : PlayerController
         WishVelocity *= GetWishSpeed();
 
         Duck.PreTick();
+        
+        UpdateLean();
 
         bool bStayOnGround = false;
         if (Swimming)

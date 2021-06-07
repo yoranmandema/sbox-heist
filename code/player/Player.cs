@@ -170,20 +170,6 @@ partial class HeistPlayer : Player
 			//lastCameraRot = Rotation.Lerp( lastCameraRot, Camera.Rotation, Time.Delta * 0.2f * angleDiffDegrees );
 		}
 
-		
-		Vector3 projectedLeanDir = Vector3.VectorPlaneProject(Owner.EyeRot * PlayerController.LeanDirection, PlayerController.LeanNormal).Normal;
-		Vector3 left = Owner.EyeRot.Forward.Cross(PlayerController.LeanNormal);
-
-		DebugOverlay.Line(PlayerController.LeanPos + PlayerController.LeanNormal,  PlayerController.LeanPos +  PlayerController.LeanNormal + left *PlayerController.LeanDirection.y * 10f, Color.Green);
-
-		float leanAngle = PlayerController.LeanDistance * -PlayerController.LeanDirection.y * 3f;
-
-		// Camera lean
-		lean = lean.LerpTo(PlayerController.IsLeaning ? leanAngle : 0f, Time.Delta * 15.0f );
-		setup.Rotation *= Rotation.From( 0, 0, lean );
-
-		setup.Position += setup.Rotation.Left * -lean;
-
 		// uncomment for lazy cam
 		//camera.Rotation = lastCameraRot;
 
@@ -215,12 +201,6 @@ partial class HeistPlayer : Player
 		setup.Position += up * MathF.Sin( walkBob ) * speed * 2;
 		setup.Position += left * MathF.Sin( walkBob * 0.6f ) * speed * 1;
 
-		var appliedLean = 0f;
-		appliedLean += MathF.Sin( walkBob ) * speed * 0.2f;
-		setup.Rotation *= Rotation.From( 0, 0, appliedLean );
-
-		speed = (speed - 0.7f).Clamp( 0, 1 ) * 3.0f;
-		
 		float aimZoom = 0;
 
 		if ( ActiveChild is BaseHeistWeapon weapon && !weapon.IsAiming)
@@ -228,18 +208,9 @@ partial class HeistPlayer : Player
 			aimZoom = 20;
 		}
 
-		// fov = fov.LerpTo( speed * 20 * MathF.Abs( forwardspeed ) - aimZoom, Time.Delta * 2.0f );
-
 		fov = fov.LerpTo( aimZoom, Time.Delta * 10.0f );
 
 		setup.FieldOfView += fov;
-
-	//	var tx = new Sandbox.UI.PanelTransform();
-	//	tx.AddRotation( 0, 0, lean * -0.1f );
-
-	//	Hud.CurrentPanel.Style.Transform = tx;
-	//	Hud.CurrentPanel.Style.Dirty(); 
-
 	}
 
 	DamageInfo LastDamage;

@@ -10,60 +10,105 @@ public partial class PlayerController : BasePlayerController {
 	[Net, Predicted] public float LeanDistance { get; set; }
 	[Net, Predicted] public Vector3 LeanNormal { get; set; }
 	[Net, Predicted] public Vector3 LeanPos { get; set; }
+	[Net, Predicted] public float Lean { get; set; }
+
+	public struct LeanResult {
+		public bool valid;
+		public Vector3 direction;
+		public Vector3 normal;
+		public Vector3 position;
+		public float distance;
+	}
 
     public override void Simulate( ) 
 	{
         IsInSprint = Input.Down( InputButton.Run ) == true;
 
-
         var wantsAim = Input.Down( InputButton.Attack2 ) == true && !IsInSprint;
 
-        var leanSurfaceCheck = CheckLeanSurface();
-
         if (wantsAim != IsAiming) {
-            if (wantsAim && leanSurfaceCheck) {
-			    IsLeaning = true;
+            if (wantsAim) {
+				var leanSurfaceCheck = CheckLeanSurface(out LeanResult leanResult);
+
+				if (leanSurfaceCheck) {
+					IsLeaning = true;
+
+					LeanDirection = leanResult.direction;
+					LeanNormal = leanResult.normal;
+					LeanDistance = leanResult.distance;
+					LeanPos = leanResult.position;
+				}
             } else {
 		        IsLeaning = false;
             }
         }
 
-        // if (!leanSurfaceCheck) IsLeaning = false;
-
 		if (IsLeaning) {
-			var projectedLeanDir = Vector3.VectorPlaneProject(Input.Rotation * LeanDirection, LeanNormal).Normal;
+			var distanceFromLeanSurface = LeanPos.Distance(Input.Position);
+			var surfaceDot = LeanNormal.Dot(-Input.Rotation.Forward);
 
-			DebugOverlay.Line(LeanPos + LeanNormal, LeanPos + LeanNormal + projectedLeanDir * LeanDistance, Color.Yellow);
+			IsLeaning = IsLeaning && distanceFromLeanSurface < 50f;
+			IsLeaning = IsLeaning && surfaceDot > 0.5f;
 		}
-
+		
 		IsAiming = wantsAim;
     }
 
-    public virtual bool CheckLeanSurface () {
-		var centerTrace = Trace.Ray(Input.Position, Input.Position + Input.Rotation.Forward * 40f)
+	public virtual void UpdateLean () {
+		float leanAngle = LeanDistance * 2f;
+
+		// Camera lean
+		Lean = Lean.LerpTo(IsLeaning ? leanAngle : 0f, Time.Delta * 8.0f );
+		EyePosLocal += LeanDirection * Lean;
+
+		var ply = Pawn as  HeistPlayer;
+
+		var boneId = ply.GetBoneIndex("head");
+		var boneTx = ply.GetBoneTransform(boneId, false);
+
+		boneTx.Rotation *= Rotation.From( 0, 0, -Lean * LeanDirection.y * 10f);
+
+		var newTransform = new Transform {
+			Position = boneTx.Position,
+			Rotation = boneTx.Rotation * Rotation.From( 0, 0, -Lean * LeanDirection.y * 0.5f),
+			Scale = boneTx.Scale
+		};
+
+		ply.SetBoneTransform(boneId, newTransform);
+	}
+
+    public virtual bool CheckLeanSurface (out LeanResult leanResult) {
+		var centerTrace = Trace.Ray(Pawn.EyePos, Pawn.EyePos + Pawn.EyeRot.Forward * 50f)
 							.WorldAndEntities()
 							.Ignore(Pawn)
+							.Size(3f)
 							.Run();
 
-		if (!centerTrace.Hit || centerTrace.Normal.Dot(-Input.Rotation.Forward) < 0.7f) return false;
+		if (!centerTrace.Hit || centerTrace.Normal.Dot(-Pawn.EyeRot.Forward) < 0.7f) {
+			leanResult = default;
+
+			return false;
+		}
 
 		var directions = new List<Vector3> () {
 			Vector3.Left,
-			Vector3.Right,
-			Vector3.Down,
-			Vector3.Up
+			Vector3.Right
 		};
 
-		var leanRadius = 12f;
-		var leanMaxDepth = 6f;
+		if (Pawn.Controller) {
+
+		}
+
+		var leanRadius = 15f;
+		var leanMaxDepth = 12f;
 		var closestSurfaceDistance = float.MaxValue;
 		var surfaceDirection = Vector3.Up;
-		var planarChecks = 3f;
+		var planarChecks = 1f;
 		var hasValidSurface = false;
 
 		for (int i = 0; i < directions.Count; i++) {
 			var dir = directions[i];
-			var planarDirection = Vector3.VectorPlaneProject(Input.Rotation * dir, centerTrace.Normal).Normal;
+			var planarDirection = Vector3.VectorPlaneProject(Pawn.EyeRot * dir, centerTrace.Normal).Normal;
 
 			TraceResult planarTrace = Trace.Ray(centerTrace.EndPos + centerTrace.Normal, centerTrace.EndPos + centerTrace.Normal + planarDirection * leanRadius)
 								.WorldAndEntities()
@@ -79,12 +124,13 @@ public partial class PlayerController : BasePlayerController {
 				normalTrace = Trace.Ray(startPos, startPos - (centerTrace.Normal * leanMaxDepth))
 									.WorldAndEntities()
 									.Ignore(Pawn)
+									.Size(3f)
 									.Run();
 
 				if (!normalTrace.Hit) break;
 			}
 
-			var isValid = !normalTrace.Hit && planarTrace.Direction.Dot(Input.Rotation.Forward) > -0.1f;
+			var isValid = !normalTrace.Hit && planarTrace.Direction.Dot(Pawn.EyeRot.Forward) > -0.2f;
 			var planarDistance = planarTrace.StartPos.Distance(normalTrace.StartPos);
 	
 			if (isValid && planarDistance < closestSurfaceDistance) {
@@ -95,12 +141,12 @@ public partial class PlayerController : BasePlayerController {
 			} 
 		}
 
-		if (hasValidSurface) {
-			LeanDirection = surfaceDirection;
-			LeanNormal = centerTrace.Normal;
-			LeanDistance = closestSurfaceDistance;
-			LeanPos = centerTrace.EndPos;
-		}
+		leanResult = new LeanResult() {
+			direction = surfaceDirection,
+			normal = centerTrace.Normal,
+			distance = closestSurfaceDistance,
+			position = centerTrace.EndPos
+		};
 
 		return hasValidSurface;
 	}
