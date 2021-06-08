@@ -146,7 +146,6 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 			if ( !IsServer ) continue;
 			if ( !tr.Entity.IsValid() ) continue;
 
-			//
 			// We turn predictiuon off for this, so aany exploding effects don't get culled etc
 			//
 			using ( Prediction.Off() )
@@ -215,15 +214,6 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 					.WithWeapon( this );
 
 				tr.Entity.TakeDamage( damageInfo );
-
-
-				// Explosion.Create(this)
-				// 	.At(tr.EndPos + tr.Normal)
-				// 	.WithDamage(10f)
-				// 	.WithRadius(150f)
-				// 	.WithForce(250f)
-				// 	.Explode();
-				
 			}
 		}
 	}

@@ -20,7 +20,7 @@ partial class HeistViewModel : BaseViewModel
 	float LookUpSpeedScale => 10f;
 	float NoiseSpeed => 0.8f;
 	float NoiseScale => 20f;
-
+	public Vector3 OverallOffset {get; set; } = new Vector3( 0, 0, -0 );
 	Vector3 WalkCycleOffsets => new Vector3( 50f, 20f, 20f );
 	float ForwardBobbing => 4f;
 	float SideWalkOffset => 80f;
@@ -192,6 +192,8 @@ partial class HeistViewModel : BaseViewModel
 		Position += forward * (sprintLerp * -10f + (MathF.Max(avoidance, avoidance * MathF.Max(MathF.Abs(avoidanceLeftDot),0.5f)) * -20f));
 		Position += left * ((velocity.y * -50f - 10) * sprintLerp + offsetLerp * 4f * -(avoidanceLeftDot + 0.25f)   * (1-aimLerp));
 		Position += up * (offsetLerp * -0f  + avoidance * avoidanceUpDot * -10 * (1-aimLerp));
+
+		Position += forward * OverallOffset.x + left * OverallOffset.y + up * OverallOffset.z;
 	}
 
 	private float WalkCycle( float speed, float power, bool abs = false )
