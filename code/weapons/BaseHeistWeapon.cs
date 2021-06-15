@@ -30,6 +30,9 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 
 	public PickupTrigger PickupTrigger { get; protected set; }
 
+	public virtual float BobScale => 1f;
+	public virtual float SwayScale => 1f;
+
 	public int AvailableAmmo()
 	{
 		var owner = Owner as HeistPlayer;

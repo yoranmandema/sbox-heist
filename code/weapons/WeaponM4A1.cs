@@ -6,6 +6,10 @@ partial class WeaponM4A1 : BaseHeistWeapon
 { 
 	public override string ViewModelPath => "weapons/css_m4a1/css_v_m4a1.vmdl_c";
 
+
+	public override float BobScale => 0.5f;
+	public override float SwayScale => 0.25f;
+
 	public override float PrimaryRate => 15.0f;
 	public override float SecondaryRate => 1.0f;
 	public override int ClipSize => 30;
@@ -25,8 +29,8 @@ partial class WeaponM4A1 : BaseHeistWeapon
 
         var vm = (ViewModelEntity as HeistViewModel);
 
-		vm.AimOffset = new Vector3( -2f, 16.4f, -4.5f );
-		vm.OverallOffset = new Vector3( -2, -10.3f, 7f );
+		vm.AimOffset = new Vector3( 2f, 15f, -6f );
+		vm.OverallOffset = new Vector3( -5f, -10.3f, 7f );
 	}
 
 	public override void AttackPrimary()
@@ -75,7 +79,7 @@ partial class WeaponM4A1 : BaseHeistWeapon
 
 		ViewModelEntity?.SetAnimBool( "fire", true );
 				
-		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -30.5f + Vector3.Left * -1.5f + Vector3.Up * 1f);
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -5.5f + Vector3.Left * -1.5f + Vector3.Up * 1f);
 
 		CrosshairPanel?.OnEvent( "fire" );
 	}

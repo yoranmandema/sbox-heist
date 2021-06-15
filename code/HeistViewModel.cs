@@ -26,7 +26,7 @@ partial class HeistViewModel : BaseViewModel
 	float SideWalkOffset => 80f;
 	public Vector3 AimOffset {get; set;} =  new Vector3( 10f, 16.9f, 2.8f );
 	Vector3 Offset => new Vector3( 1f, 13f, -8f );
-	Vector3 CrouchOffset => new Vector3( -10f, -50f, -0f );
+	Vector3 CrouchOffset => new Vector3( -20f, -15f, -0f );
 	Vector3 SmoothedVelocity;
 	float VelocityClamp => 3f;
 
@@ -73,6 +73,9 @@ partial class HeistViewModel : BaseViewModel
 
 		SmoothedVelocity += (Owner.Velocity - SmoothedVelocity) * 5f * DeltaTime;
 
+		// Should prevent near clipping, but is it a good idea?
+		camSetup.ZNear = 1f;
+
 		var camTransform = new Transform(Owner.EyePos, Owner.EyeRot);
 		var speed = Owner.Velocity.Length.LerpInverse( 0, 320 );
 		var bobSpeed = SmoothedVelocity.Length.LerpInverse( -100, 320 );
@@ -94,6 +97,11 @@ partial class HeistViewModel : BaseViewModel
 			desiredAvoidanceNormal = avoidanceTrace.Normal;
 		}
 
+		var bobScale = Weapon.BobScale;
+		var swayScale = Weapon.SwayScale;
+		var bobScaleSqr = MathF.Pow( bobScale, 2 );
+		var swayScaleSqr = MathF.Pow( swayScale, 2 );
+
 		avoidanceNormalRotation = Rotation.Slerp(avoidanceNormalRotation, Rotation.LookAt(desiredAvoidanceNormal, Vector3.Up), 10 * Time.Delta);
 
 		var avoidanceNormal = avoidanceNormalRotation.Forward;
@@ -101,7 +109,7 @@ partial class HeistViewModel : BaseViewModel
 		LerpTowards( ref avoidance, avoidanceTrace.Hit ? (1f - avoidanceTrace.Fraction) : 0, 4f );
 		LerpTowards( ref sprintLerp, Weapon.IsInSprint ? 1 : 0, 8f );
 		LerpTowards( ref aimLerp, Weapon.IsAiming ? 1 : 0, 12f );
-		LerpTowards( ref upDownOffset, speed * -LookUpSpeedScale + camSetup.Rotation.Forward.z * -LookUpPitchScale, LookUpPitchScale );
+		LerpTowards( ref upDownOffset, speed * -LookUpSpeedScale + camSetup.Rotation.Forward.z * -LookUpPitchScale * bobScale, LookUpPitchScale * bobScale );
 
 		FieldOfView = 80f * (1- aimLerp) + 40f * aimLerp;
 
@@ -126,23 +134,24 @@ partial class HeistViewModel : BaseViewModel
 
 		walkBob %= 360;
 
-		noisePos += DeltaTime * NoiseSpeed;
+		noisePos += DeltaTime * NoiseSpeed * swayScale;
 
-		acceleration += Vector3.Left * -Input.MouseDelta.x * DeltaTime * MouseScale * 0.5f   * (1f-aimLerp * 3f);
-		acceleration += Vector3.Up * -Input.MouseDelta.y * DeltaTime * MouseScale * (1f-aimLerp * 3f);
-		acceleration += -velocity * ReturnForce * DeltaTime;
+		acceleration += Vector3.Left * -Input.MouseDelta.x * DeltaTime * MouseScale * 0.5f   * (1f-aimLerp * 3f) * swayScaleSqr;
+		acceleration += Vector3.Up * -Input.MouseDelta.y * DeltaTime * MouseScale * (1f-aimLerp * 3f) * swayScaleSqr;
+		acceleration += -velocity * ReturnForce * DeltaTime * bobScale;
 
 		// Apply horizontal offsets based on walking direction
-		var horizontalForwardBob = WalkCycle( 0.5f, 3f ) * speed * WalkCycleOffsets.x * DeltaTime;
+		var horizontalForwardBob = WalkCycle( 0.5f, 3f ) * speed * WalkCycleOffsets.x * DeltaTime * bobScaleSqr;
 
 		acceleration += forward.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Forward * ForwardBobbing * horizontalForwardBob;
 
 		// Apply left bobbing and up/down bobbing
-		acceleration += Vector3.Left * WalkCycle( 0.5f, 2f ) * speed * WalkCycleOffsets.y * (1 + sprintLerp) * DeltaTime;
-		acceleration += Vector3.Up * WalkCycle( 0.5f, 2f, true ) * speed * WalkCycleOffsets.z * DeltaTime;
+		acceleration += Vector3.Left * WalkCycle( 0.5f, 2f ) * speed * WalkCycleOffsets.y * (1 + sprintLerp) * DeltaTime * bobScaleSqr;
+		acceleration += Vector3.Up * WalkCycle( 0.5f, 2f, true ) * speed * WalkCycleOffsets.z * DeltaTime * bobScaleSqr;
 
-		acceleration += left.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Left * speed * SideWalkOffset * DeltaTime * (1-aimLerp* 0.5f);
+		acceleration += left.WithZ( 0 ).Normal.Dot( Owner.Velocity.Normal ) * Vector3.Left * speed * SideWalkOffset * DeltaTime * (1-aimLerp* 0.5f) * bobScaleSqr;
 
+		// Scale movement to model scale
 		velocity += acceleration * DeltaTime;
 
 		ApplyDamping( ref acceleration, AccelDamping );
@@ -153,7 +162,7 @@ partial class HeistViewModel : BaseViewModel
 			Noise.Perlin( noisePos, 0f, noiseZ ),
 			Noise.Perlin( noisePos, 10f, noiseZ ),
 			Noise.Perlin( noisePos, 20f, noiseZ )
-		) * NoiseScale * Time.Delta * (1-aimLerp * 0.9f);
+		) * NoiseScale * Time.Delta * (1-aimLerp * 0.9f) * swayScale;
 
 		velocity = velocity.Normal * Math.Clamp( velocity.Length, 0, VelocityClamp );
 
@@ -166,9 +175,9 @@ partial class HeistViewModel : BaseViewModel
 
 		var desiredOffset = Vector3.Lerp(Offset, AimOffset, aimLerp);
 
-		Position += forward * (velocity.x * VelocityScale + desiredOffset.x);
-		Position += left * (velocity.y * VelocityScale + desiredOffset.y);
-		Position += up * (velocity.z * VelocityScale + desiredOffset.z + upDownOffset * (1-aimLerp));
+		Position += forward * (velocity.x * VelocityScale * bobScale + desiredOffset.x);
+		Position += left * (velocity.y * VelocityScale * bobScale + desiredOffset.y);
+		Position += up * (velocity.z * VelocityScale * bobScale + desiredOffset.z + upDownOffset * (1-aimLerp) * bobScale);
 
 		Position += (desiredRotation.Forward - camSetup.Rotation.Forward) * -PivotForce;
 
@@ -189,9 +198,9 @@ partial class HeistViewModel : BaseViewModel
 		Rotation *= Rotation.FromAxis(Vector3.Up, velocity.y * (sprintLerp * 30f) + (sprintLerp + avoidance * avoidanceLeftDot * (1-sprintLerp)) * 50f   * (1-aimLerp));
 		Rotation *= Rotation.FromAxis(Vector3.Right, avoidance * 50f * avoidanceUpDot  * (1-aimLerp));
 
-		Position += forward * (sprintLerp * -10f + (MathF.Max(avoidance, avoidance * MathF.Max(MathF.Abs(avoidanceLeftDot),0.5f)) * -20f));
-		Position += left * ((velocity.y * -50f - 10) * sprintLerp + offsetLerp * 4f * -(avoidanceLeftDot + 0.25f)   * (1-aimLerp));
-		Position += up * (offsetLerp * -0f  + avoidance * avoidanceUpDot * -10 * (1-aimLerp));
+		Position += forward * (sprintLerp * -10f + (MathF.Max(avoidance, avoidance * MathF.Max(MathF.Abs(avoidanceLeftDot),0.5f)) * -20f)) * bobScale;
+		Position += left * ((velocity.y * -50f - 10) * sprintLerp + offsetLerp * 4f * -(avoidanceLeftDot + 0.25f)   * (1-aimLerp)) * bobScale;
+		Position += up * (offsetLerp * -0f  + avoidance * avoidanceUpDot * -10 * (1-aimLerp)) * bobScale;
 
 		Position += forward * OverallOffset.x + left * OverallOffset.y + up * OverallOffset.z;
 	}
