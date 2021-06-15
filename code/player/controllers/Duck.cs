@@ -1,4 +1,4 @@
-﻿using Sandbox.Rcon;
+﻿using Sandbox;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +6,6 @@ using System.Numerics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Sandbox;
 
 [Library]
 public class Duck : PlayerController
@@ -22,7 +21,7 @@ public class Duck : PlayerController
 
     public virtual void PreTick()
     {
-        bool wants = Controller.Input.Down(InputButton.Duck);
+        bool wants = Input.Down(InputButton.Duck);
 
         if (wants != IsActive)
         {

@@ -1,0 +1,72 @@
+// 
+// HeistGame : Sandbox.Game 
+// 
+@PointClass = heist : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// Crossbow : BaseHeistWeapon 
+// 
+@PointClass = heist_crossbow : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// CrossbowBolt : Sandbox.ModelEntity 
+// 
+@PointClass = crossbow_bolt : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// Grenade : BaseHeistWeapon 
+// 
+@PointClass = heist_grenade : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// GrenadeProjectile : Sandbox.ModelEntity 
+// 
+@PointClass = grenade_projectile : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// Pistol : BaseHeistWeapon 
+// 
+@PointClass = heist_pistol : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// Shotgun : BaseHeistWeapon 
+// 
+@PointClass = heist_shotgun : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// SMG : BaseHeistWeapon 
+// 
+@PointClass = heist_smg : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
+// 
+// WeaponM4A1 : BaseHeistWeapon 
+// 
+@PointClass = heist_m4a1 : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+]
+
