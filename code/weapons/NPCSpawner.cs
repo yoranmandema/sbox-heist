@@ -38,7 +38,7 @@ partial class NPCSpawner : BaseHeistWeapon
 					.Run();
 				if (tr.Hit)
 				{
-					var pawn = new NPCPawn
+					var pawn = new NpcGunner
 					{
 						Position = tr.EndPos,
 						Rotation = Owner.Rotation,

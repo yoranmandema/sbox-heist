@@ -48,7 +48,7 @@ public class NavSteer
 
 		foreach ( var ent in Physics.GetEntitiesInSphere( center, radius ) )
 		{
-			if ( ent is not NPCPawn ) continue;
+			if ( ent is not NpcPawn ) continue;
 			if ( ent.IsWorld ) continue;
 
 			var delta = (position - ent.Position).WithZ( 0 );

@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-public partial class NPCPawn : Sandbox.AnimEntity
+public partial class NpcPawn : Sandbox.AnimEntity
 {
 
 	[ConVar.Replicated]
@@ -14,11 +14,11 @@ public partial class NPCPawn : Sandbox.AnimEntity
 	[ServerCmd( "npc_clear" )]
 	public static void NpcClear()
 	{
-		foreach ( var npc in Entity.All.OfType<NPCPawn>().ToArray() )
+		foreach ( var npc in Entity.All.OfType<NpcPawn>().ToArray() )
 			npc.Delete();
 	}
 
-	float Speed;
+	protected float Speed;
 
 	NavPath Path = new NavPath();
 	public NavSteer Steer;
@@ -57,13 +57,22 @@ public partial class NPCPawn : Sandbox.AnimEntity
 
 		Speed = 100f;
 		Health = 100;
+	}
 
-		Steer = new Sandbox.Nav.Wander();
+	protected virtual void NpcThink()
+	{
+		if (Steer == null)
+		{
+			Steer = new Sandbox.Nav.Wander();
+		}
 	}
 
 	[Event.Tick.Server]
 	public void Tick()
 	{
+
+		NpcThink();
+
 		using var _a = Sandbox.Debug.Profile.Scope( "NpcTest::Tick" );
 
 		InputVelocity = 0;
