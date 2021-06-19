@@ -32,10 +32,15 @@ partial class Pistol : BaseHeistWeapon
 
 		if ( !TakeAmmo( 1 ) )
 		{
-			DryFire();
+			if ( CanReload() )
+			{
+				Reload();
+			} else
+			{
+				DryFire();
+			}
 			return;
 		}
-
 
 		//
 		// Tell the clients to play the shoot effects

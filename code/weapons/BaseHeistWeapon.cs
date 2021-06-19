@@ -36,6 +36,10 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 
 	public int AvailableAmmo()
 	{
+		if (Owner is NpcPawn)
+		{
+			return 10000;
+		}
 		var owner = Owner as HeistPlayer;
 		if ( owner == null ) return 0;
 		return owner.AmmoCount( AmmoType );
@@ -83,7 +87,7 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 
 		(Owner as AnimEntity).SetAnimBool( "b_reload", true );
 
-		StartReloadEffects();
+		// StartReloadEffects();
 	}
 
 	public override void Simulate( Client owner ) 
@@ -111,7 +115,6 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		}
 	}
 
-
 	public virtual void OnReloadFinish()
 	{
 		if ( Owner is HeistPlayer player )
@@ -121,6 +124,9 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 				return;
 
 			AmmoClip += ammo;
+		} else if ( Owner is NpcPawn )
+		{
+			AmmoClip = ClipSize;
 		}
 	}
 
