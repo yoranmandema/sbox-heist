@@ -42,10 +42,12 @@ partial class HeistPlayer : Player
 		Inventory.Add( new SMG() );
 		Inventory.Add( new Crossbow() );
 
-		GiveAmmo( AmmoType.Pistol, 100 );
-		GiveAmmo( AmmoType.Grenade, 100 );
-		GiveAmmo( AmmoType.Buckshot, 100 );
-		GiveAmmo( AmmoType.Crossbow, 100 );
+		Inventory.Add( new NPCSpawner(), true );
+
+		GiveAmmo( AmmoType.Pistol, 1000 );
+		GiveAmmo( AmmoType.Grenade, 1000 );
+		GiveAmmo( AmmoType.Buckshot, 1000 );
+		GiveAmmo( AmmoType.Crossbow, 1000 );
 
 		SupressPickupNotices = false;
 		Health = 100;

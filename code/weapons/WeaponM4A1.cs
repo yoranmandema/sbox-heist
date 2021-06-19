@@ -6,11 +6,12 @@ partial class WeaponM4A1 : BaseHeistWeapon
 { 
 	public override string ViewModelPath => "weapons/css_m4a1/css_v_m4a1.vmdl_c";
 
+	public override AmmoType AmmoType => AmmoType.Pistol;
 
 	public override float BobScale => 0.5f;
 	public override float SwayScale => 0.25f;
 
-	public override float PrimaryRate => 15.0f;
+	public override float PrimaryRate => 13.3f;
 	public override float SecondaryRate => 1.0f;
 	public override int ClipSize => 30;
 	public override float ReloadTime => 4.0f;
@@ -19,9 +20,8 @@ partial class WeaponM4A1 : BaseHeistWeapon
 	public override void Spawn()
 	{
 		base.Spawn();
-
 		SetModel( "weapons/css_m4a1/css_w_m4a1.vmdl_c" );
-		AmmoClip = 30;
+		AmmoClip = this.ClipSize;
 	}
 
 	public override void CreateViewModel () {
@@ -50,7 +50,9 @@ partial class WeaponM4A1 : BaseHeistWeapon
 		// Tell the clients to play the shoot effects
 		//
 		ShootEffects();
-		PlaySound( "rust_smg.shoot" );
+		PlaySound( "rust_smg.shoot" ); // holy shit this is loud
+
+		// PlaySound( "css_m4a1.fire" ); // holy shit this is loud
 
 		//
 		// Shoot the bullets
@@ -79,7 +81,7 @@ partial class WeaponM4A1 : BaseHeistWeapon
 
 		ViewModelEntity?.SetAnimBool( "fire", true );
 				
-		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -5.5f + Vector3.Left * -1.5f + Vector3.Up * 1f);
+		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -0.5f + Vector3.Left * -0.5f + Vector3.Up * 0.5f);
 
 		CrosshairPanel?.OnEvent( "fire" );
 	}

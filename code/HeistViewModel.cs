@@ -195,8 +195,8 @@ partial class HeistViewModel : BaseViewModel
 		LerpTowards( ref avoidanceLeftDot, forward.Dot(avoidanceLeft), 4f );
 		LerpTowards( ref avoidanceUpDot, forward.Dot(avoidanceUp) * (1f - 2 * MathF.Abs(-avoidanceLeftDot)), 4f );
 
-		Rotation *= Rotation.FromAxis(Vector3.Up, velocity.y * (sprintLerp * 30f) + (sprintLerp + avoidance * avoidanceLeftDot * (1-sprintLerp)) * 50f   * (1-aimLerp));
-		Rotation *= Rotation.FromAxis(Vector3.Right, avoidance * 50f * avoidanceUpDot  * (1-aimLerp));
+		Rotation *= Rotation.FromAxis(Vector3.Up, velocity.y * (sprintLerp * 30f) + (sprintLerp + avoidance * avoidanceLeftDot * (1-sprintLerp)) * 50f * (1 - aimLerp) * bobScale);
+		Rotation *= Rotation.FromAxis(Vector3.Right, avoidance * 50f * avoidanceUpDot  * (1-aimLerp) * bobScale);
 
 		Position += forward * (sprintLerp * -10f + (MathF.Max(avoidance, avoidance * MathF.Max(MathF.Abs(avoidanceLeftDot),0.5f)) * -20f)) * bobScale;
 		Position += left * ((velocity.y * -50f - 10) * sprintLerp + offsetLerp * 4f * -(avoidanceLeftDot + 0.25f)   * (1-aimLerp)) * bobScale;

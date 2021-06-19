@@ -4,6 +4,7 @@
 @PointClass = heist : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -12,6 +13,7 @@
 @PointClass = heist_crossbow : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -20,6 +22,7 @@
 @PointClass = crossbow_bolt : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -28,6 +31,7 @@
 @PointClass = heist_grenade : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -36,6 +40,16 @@
 @PointClass = grenade_projectile : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
+]
+
+// 
+// NPCSpawner : BaseHeistWeapon 
+// 
+@PointClass = heist_npcspawner : ""
+[
+	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -44,6 +58,7 @@
 @PointClass = heist_pistol : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -52,6 +67,7 @@
 @PointClass = heist_shotgun : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -60,6 +76,7 @@
 @PointClass = heist_smg : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
 // 
@@ -68,5 +85,6 @@
 @PointClass = heist_m4a1 : ""
 [
 	targetname(target_source) : "Name" : : "The name that other entities refer to this entity by."
+	parentname(target_destination) [ group="Hierarchy" ] : "Parent" : : "The name of this entity's parent in the movement hierarchy. Entities with parents move with their parent."
 ]
 
