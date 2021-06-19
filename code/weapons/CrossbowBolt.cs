@@ -55,10 +55,11 @@ partial class CrossbowBolt : ModelEntity
 													.WithWeapon( this );
 
 				tr.Entity.TakeDamage( damageInfo );
+
+				// TODO: Parent to bone so this will stick in the meaty heads
+				SetParent( tr.Entity, tr.Bone );
 			}
 
-			// TODO: Parent to bone so this will stick in the meaty heads
-			SetParent( tr.Entity, tr.Bone );
 			Owner = null;
 
 			//

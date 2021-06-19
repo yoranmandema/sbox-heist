@@ -28,6 +28,9 @@ partial class HeistPlayer
 		ent.SetRagdollVelocityFrom( this );
 		ent.DeleteAsync( 20.0f );
 
+		// Copy the skin color
+		ent.SetMaterialGroup( GetMaterialGroup() );
+
 		// Copy the clothes over
 		foreach ( var child in Children )
 		{

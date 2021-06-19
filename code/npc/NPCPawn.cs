@@ -55,7 +55,8 @@ public partial class NPCPawn : Sandbox.AnimEntity
 
 		SetBodyGroup( 1, 0 );
 
-		Speed = 200f;
+		Speed = 100f;
+		Health = 100;
 
 		Steer = new Sandbox.Nav.Wander();
 	}
@@ -186,4 +187,87 @@ public partial class NPCPawn : Sandbox.AnimEntity
 		Velocity = move.Velocity;
 	}
 
+
+	[ClientRpc]
+	void BecomeRagdollOnClient( Vector3 force, int forceBone )
+	{
+		// TODO - lets not make everyone write this shit out all the time
+		// maybe a CreateRagdoll<T>() on ModelEntity?
+		var ent = new ModelEntity();
+		ent.Position = Position;
+		ent.Rotation = Rotation;
+		ent.MoveType = MoveType.Physics;
+		ent.UsePhysicsCollision = true;
+		ent.SetInteractsAs( CollisionLayer.Debris );
+		ent.SetInteractsWith( CollisionLayer.WORLD_GEOMETRY );
+		ent.SetInteractsExclude( CollisionLayer.Player | CollisionLayer.Debris );
+
+		ent.SetModel( GetModelName() );
+		ent.CopyBonesFrom( this );
+		ent.TakeDecalsFrom( this );
+		ent.SetRagdollVelocityFrom( this );
+		ent.DeleteAsync( 5f );
+
+		// Copy the skin color
+		ent.SetMaterialGroup( GetMaterialGroup() );
+
+		// Copy the clothes over
+		foreach ( var child in Children )
+		{
+			if ( child is ModelEntity e )
+			{
+				var model = e.GetModelName();
+				if ( model != null && !model.Contains( "clothes" ) ) // Uck we 're better than this, entity tags, entity type or something?
+					continue;
+
+				var clothing = new ModelEntity();
+				clothing.SetModel( model );
+				clothing.SetParent( ent, true );
+			}
+		}
+
+		ent.PhysicsGroup.AddVelocity( force );
+
+		if ( forceBone >= 0 )
+		{
+			var body = ent.GetBonePhysicsBody( forceBone );
+			if ( body != null )
+			{
+				body.ApplyForce( force * 1000 );
+			}
+			else
+			{
+				ent.PhysicsGroup.AddVelocity( force );
+			}
+		}
+	}
+
+	public override void OnKilled()
+	{
+		base.OnKilled();
+
+		BecomeRagdollOnClient( LastDamage.Force, GetHitboxBone( LastDamage.HitboxIndex ) );
+	}
+
+	DamageInfo LastDamage;
+
+	public override void TakeDamage( DamageInfo info )
+	{
+		LastDamage = info;
+
+		// hack - hitbox 0 is head
+		// we should be able to get this from somewhere
+		if ( info.HitboxIndex == 0 )
+		{
+			info.Damage *= 2.0f;
+		}
+
+		base.TakeDamage( info );
+
+		if ( info.Attacker is HeistPlayer attacker )
+		{
+			// Note - sending this only to the attacker!
+			attacker.DidDamage( To.Single( attacker ), info.Position, info.Damage, Health.LerpInverse( 100, 0 ) );
+		}
+	}
 }
