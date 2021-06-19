@@ -263,9 +263,9 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	{
 		if ( Local.Hud == null ) return;
 
-		CrosshairPanel = new Crosshair();
+		CrosshairPanel = new HeistCrosshair(); //new Crosshair();
 		CrosshairPanel.Parent = Local.Hud;
-		CrosshairPanel.AddClass( ClassInfo.Name );
+		CrosshairPanel.AddClass( "crosshair_default" );
 	}
 
 	public bool IsUsable()
