@@ -12,6 +12,7 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public virtual AmmoType AmmoType => AmmoType.Pistol;
 	public virtual int ClipSize => 16;
 	public virtual float ReloadTime => 3.0f;
+	public virtual float ReloadFinishTime => 0.0f;
 	public virtual int Bucket => 1;
 	public virtual int BucketWeight => 100;
 	public virtual float SprintOutTime => 0.5f;
@@ -100,6 +101,11 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 			OnReloadFinish();
 		}
 
+		if ( IsReloading && TimeSinceReload > MathF.Max( ReloadFinishTime, ReloadTime ) )
+		{
+			IsReloading = false;
+		}
+
 		if (CrosshairPanel != null) {
 			CrosshairPanel.Style.Opacity = !IsAiming ? 1f : 0f;
 		}
@@ -108,8 +114,6 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 
 	public virtual void OnReloadFinish()
 	{
-		IsReloading = false;
-
 		if ( Owner is HeistPlayer player )
 		{
 			var ammo = player.TakeAmmo( AmmoType, ClipSize - AmmoClip );

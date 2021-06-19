@@ -14,7 +14,9 @@ partial class WeaponM4A1 : BaseHeistWeapon
 	public override float PrimaryRate => 13.3f;
 	public override float SecondaryRate => 1.0f;
 	public override int ClipSize => 30;
-	public override float ReloadTime => 4.0f;
+	public override float ReloadTime => 2.0f;
+
+	public override float ReloadFinishTime => 3.5f;
 	public override int Bucket => 2;
 
 	public override void Spawn()
