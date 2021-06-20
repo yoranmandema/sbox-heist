@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Sandbox;
 
-enum NpcState // TODO: more specific name for combat NPC enum?
+enum NpcState
 {
 	Inactive, // do nothing
 	Idle, // stand still, look around
