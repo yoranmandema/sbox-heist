@@ -5,7 +5,7 @@ partial class NPCSpawner : BaseHeistWeapon
 {
 	public override string ViewModelPath => "weapons/rust_pistol/v_rust_pistol.vmdl";
 
-	public override float PrimaryRate => 1;
+	public override float PrimaryRate => 5;
 	public override int Bucket => 1;
 	public override AmmoType AmmoType => AmmoType.Grenade;
 

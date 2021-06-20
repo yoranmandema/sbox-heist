@@ -25,7 +25,7 @@ enum NpcEvent
 
 	GetTarget, // idle/patrol -> engage
 	PushTarget, // engage/search -> push
-	SeekTarget, // push/patrol -> search
+	SeekTarget, // push/patrol/search -> search
 	Disengage, // engage/push/search -> patrol
 }
 class NpcStateTransition
@@ -54,6 +54,36 @@ class NpcStateTransition
 class NpcGunner : NpcPawn //IStateMachine
 {
 
+	[ConVar.Replicated]
+	public static bool npc_gunner_nopatrol { get; set; }
+
+	[ServerCmd( "npc_gunner_dm" )] // sets them up to kill each other
+	public static void NpcBattleRoyale()
+	{
+		var arr = Entity.All.OfType<NpcGunner>().ToArray();
+		if ( arr.Length <= 1 ) return;
+
+		Random random = new Random();
+
+		foreach ( var npc in arr )
+		{
+			var tgt = random.Next(0, arr.Length);
+			if ( arr[tgt] == npc ) tgt = (tgt + 1) % arr.Length;
+			npc.FireEvent( NpcEvent.SeekTarget, arr[tgt] );
+		}
+	}
+
+	[ServerCmd( "npc_gunner_seekplayer" )] // sets them up to hunt the player
+	public static void NpcSeekPlayer()
+	{
+		var plys = All.OfType<Player>().ToArray();
+		Random random = new Random();
+		foreach ( var npc in All.OfType<NpcGunner>().ToArray() )
+		{
+			npc.FireEvent( NpcEvent.SeekTarget, plys[random.Next( 0, plys.Length )] );
+		}
+	}
+
 	// --------------------------------------------------
 	// Variables
 	// --------------------------------------------------
@@ -64,13 +94,13 @@ class NpcGunner : NpcPawn //IStateMachine
 	protected float CombatSpeed = 150f;
 
 	// The distance within which we try to back off
-	protected float MinCombatDistance = 50f;
+	protected float MinCombatDistance = 100f;
 
 	// The distance beyond which we will close in if pushing
-	protected float PushCombatDistance = 200f;
+	protected float PushCombatDistance = 500f;
 
 	// The distance beyond which we don't try to shoot (not effective)
-	protected float MaxCombatDistance = 400f;
+	protected float MaxCombatDistance = 1000f;
 
 	TimeSince TimeSincePathThink;
 	TimeSince TimeSinceVisCheck;
@@ -104,6 +134,7 @@ class NpcGunner : NpcPawn //IStateMachine
 			{ new NpcStateTransition(NpcState.Engage, NpcEvent.PushTarget), NpcState.Push },
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.PushTarget), NpcState.Push },
 
+			{ new NpcStateTransition(NpcState.Search, NpcEvent.SeekTarget), NpcState.Search }, // a new unknown target might override our current one
 			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.SeekTarget), NpcState.Search },
 			{ new NpcStateTransition(NpcState.Push, NpcEvent.SeekTarget), NpcState.Search },
 
@@ -167,28 +198,42 @@ class NpcGunner : NpcPawn //IStateMachine
 			// If we've seen our target recently, we know where they are;
 			// otherwise we can only proceed with last known pos
 			var tgtpos = TimeSinceTargetVisible < 2f ? Target.Position : LastTargetPosition;
-
+			var dist = (tgtpos - Position).Length;
+			var closer = Position + (tgtpos - Position) * 0.5f;
 			if ( CurrentState == NpcState.Engage )
 			{
-				// TODO close up to target if beyond max dist
 				// We are in engage mode. Speed up and wander nearby (like strafing)
 				Speed = CombatSpeed;
-				Sandbox.Nav.Wander wander = new Sandbox.Nav.Wander();
-				wander.MinRadius = 25f;
-				wander.MaxRadius = 75f;
-				Steer = wander;
+
+				if ( dist > MaxCombatDistance )
+				{
+					// If we are not close, try to find a position in between the target and ourselves
+					var distmult = Math.Clamp( dist / 400, 1, 3 );
+					var pos = NavMesh.GetPointWithinRadius( closer, 100f * distmult, 200f * distmult );
+					Steer = new NavSteer();
+					if ( !pos.HasValue )
+						Steer.Target = tgtpos;
+					else
+						Steer.Target = (Vector3)pos;
+				} else
+				{
+					Sandbox.Nav.Wander wander = new Sandbox.Nav.Wander();
+					wander.MinRadius = 40f;
+					wander.MaxRadius = 100f;
+					Steer = wander;
+				}
 			}
 			else if ( CurrentState == NpcState.Push )
 			{
 				// We are pushing. Let's get in some trouble and die for the player's amusement!
 				Speed = CombatSpeed;
-				var dist = (tgtpos - Position).Length;
+
 				Vector3? pos;
 				if ( dist > PushCombatDistance )
 				{
 					// If we are not close, try to find a position in between the target and ourselves
-					var closer = Position + (tgtpos - Position) * 0.5f;
-					pos = NavMesh.GetPointWithinRadius( closer, 150f, 300f );
+					var distmult = Math.Clamp( dist / 300, 1, 3 );
+					pos = NavMesh.GetPointWithinRadius( closer, 100f * distmult, 200f * distmult );
 				}
 				else
 				{
@@ -204,14 +249,35 @@ class NpcGunner : NpcPawn //IStateMachine
 
 			} else if ( CurrentState == NpcState.Search )
 			{
-				// We lost track of the target. Carefully approach area of last known position
-				Speed = PatrolSpeed;
-				var pos = NavMesh.GetPointWithinRadius( tgtpos, 200f, 400f );
+				// We lost track of the target.
+				Speed = (CombatSpeed + PatrolSpeed) / 2;
+				if ( LastTargetPosition != Vector3.Zero )
+				{
+					var tr = Trace.Ray( EyePos, tgtpos )
+						.Ignore( Owner )
+						.Ignore( this )
+						.Run();
+					if ( tr.Fraction >= 0.9 )
+						LastTargetPosition = Vector3.Zero;
+				}
+
+				Vector3? pos;
+				if ( LastTargetPosition == Vector3.Zero )
+				{
+					// We can see the last known position. Let's look around instead
+					pos = NavMesh.GetPointWithinRadius( Position, 200f, 400f );
+				} else
+				{
+					// Approach last known position
+					pos = NavMesh.GetPointWithinRadius( tgtpos, 100f, 200f );
+				}
+
 				Steer = new NavSteer();
 				if ( !pos.HasValue )
 					Steer.Target = tgtpos;
 				else
 					Steer.Target = (Vector3)pos;
+
 			}
 		} else
 		{
@@ -227,7 +293,7 @@ class NpcGunner : NpcPawn //IStateMachine
 		// TODO: check visual cone for enemies?
 		if ( CurrentState == NpcState.Push )
 		{
-			if ( TimeSinceTargetVisible >= 5f )
+			if ( Target == null || Target.Health <= 0 || TimeSinceTargetVisible >= 5f )
 			{
 				// Lost target, hunt them down
 				FireEvent( NpcEvent.SeekTarget, Target );
@@ -235,7 +301,7 @@ class NpcGunner : NpcPawn //IStateMachine
 			}
 		} else if ( CurrentState == NpcState.Engage )
 		{
-			if ( TimeSinceTargetVisible >= 10f )
+			if ( Target == null || Target.Health <= 0 || TimeSinceTargetVisible >= 8f )
 			{
 				// Enter patrol state (we don't want to actively look for them) 
 				FireEvent( NpcEvent.Disengage, null );
@@ -248,14 +314,16 @@ class NpcGunner : NpcPawn //IStateMachine
 		}
 		else if ( CurrentState == NpcState.Search )
 		{
-			if ( TimeSinceTargetVisible >= 15f )
+			if ( TimeSinceTargetVisible >= 20f )
 			{
 				// Give up hunting
 				FireEvent( NpcEvent.Disengage, null );
 				return;
-			} else if ( TimeSinceTargetVisible == 0 )
+			} else if ( TimeSinceTargetVisible <= 0.5f )
 			{
-				if ( Target.Health <= Health * 0.75 )
+				if ( Target == null || Target.Health <= 0 )
+					FireEvent( NpcEvent.Disengage, null );
+				else if ( Target.Health <= Health * 0.75 )
 					FireEvent( NpcEvent.PushTarget, Target );
 				else
 					FireEvent( NpcEvent.SeekTarget, Target );
@@ -263,7 +331,7 @@ class NpcGunner : NpcPawn //IStateMachine
 		}
 		else if ( CurrentState == NpcState.Idle )
 		{
-			if ( TimeSincePathThink > 15f )
+			if ( !npc_gunner_nopatrol && TimeSincePathThink > 10f )
 			{
 				// Let's start patrolling!
 				FireEvent( NpcEvent.ResumePatrol, null );
@@ -326,15 +394,16 @@ class NpcGunner : NpcPawn //IStateMachine
 		{
 			var dist = (Target.Position - Position).Length;
 			var angdiff = EyeRot.Distance( Rotation.LookAt( Target.EyePos - EyePos, Vector3.Up ) );
-			if ( dist > 150f && angdiff >= 90f ) {
-				LastVisCheck = false; // can only see in front; but up close we get some situational awareness
+			if ( dist > (TimeSinceTargetVisible > 2f ? 150f : 250f) && angdiff >= (TimeSinceTargetVisible > 2f ? 75f : 100f) ) {
+				// can only see in front; but up close we get some situational awareness
+				// our visibility gets a nerf if we haven't seen the target for a bit; this allows them to sneak up on us
+				LastVisCheck = false;
 			} else
 			{
 				var tr = Trace.Ray( EyePos, Target.EyePos )
 							.UseHitboxes()
 							.Ignore( Owner )
 							.Ignore( this )
-							.Size( 4 )
 							.Run();
 				if ( tr.Entity != Target )
 				{
@@ -378,7 +447,7 @@ class NpcGunner : NpcPawn //IStateMachine
 
 		StateUpdate();
 
-		if ( Target != null && TimeSincePathThink > 5f )
+		if ( Target != null && TimeSincePathThink > 3f )
 		{
 			SteerUpdate();
 		}
@@ -408,75 +477,6 @@ class NpcGunner : NpcPawn //IStateMachine
 			}
 			SetAnimInt( "holdtype", Weapon.IsReloading ? 1 : 0 );
 		}
-
-		/*
-		var shouldshoot = VisCheck();
-
-		if ( Steer == null )
-		{
-			if ( Target != null && Target.Health > 0 )
-			{
-				Speed = CombatSpeed;
-				Steer = new NavSteer();
-				Steer.Target = Target.Position;
-				SetAnimInt( "holdtype", 1 );
-			} else
-			{
-				Target = null;
-				Speed = PatrolSpeed;
-				Steer = new Sandbox.Nav.Wander();
-				SetAnimInt( "holdtype", 0 );
-			}
-			TimeSincePathThink = 0;
-		} else if ( Target != null )
-		{
-			var angdiff = Rotation.Distance( Rotation.LookAt( Target.Position - Position, Vector3.Up ) );
-			if ( Weapon != null && shouldshoot && angdiff <= 15f )
-			{
-				if ( Weapon.CanPrimaryAttack() )
-				{
-					Weapon.AttackPrimary();
-				} else if ( Weapon.CanReload() && Weapon.AmmoClip == 0 )
-				{
-					Weapon.Reload();
-				}
-			}
-
-			if ( TimeSincePathThink > 0.25f )
-			{
-				TimeSincePathThink = 0;
-
-				var vec = Target.Position - Position;
-				var norm = vec.Normal;
-				var dist = vec.Length;
-
-				if ( shouldshoot )
-				{
-					var rand = new Random();
-					Steer.Target = Target.Position + norm.Cross( Vector3.Up ) * ((float)rand.NextDouble() * 1000f - 500f);
-					if ( dist > 3000 )
-					{
-						Steer.Target += norm * 500;
-					}
-					else if ( dist <= 200 )
-					{
-						Steer.Target += norm * -200;
-					}
-				} else
-				{
-					Steer.Target = Target.Position;
-				}
-			}
-		} else
-		{
-			if ( TimeSincePathThink > 5f )
-			{
-				var rand = new Random();
-				TimeSincePathThink = (float)rand.NextDouble() * 3f + 1;
-				LookDir = Steer.Target + (Vector3.Random * 200f).WithZ(EyePos.z);
-			}
-		}
-		*/
 	}
 
 	protected override void NpcTurn()
@@ -491,30 +491,45 @@ class NpcGunner : NpcPawn //IStateMachine
 				vec = LastTargetPosition - Position;
 
 			var TargetRotation = Rotation.LookAt( vec.WithZ( 0 ), Vector3.Up );
+			//var eyeRotSpeed = Math.Clamp( vec.Length / 75f, 2.5f, 7.5f ); // The closer the Target, the harder it is to adjust
+			var lastRot = Rotation;
 			Rotation = Rotation.Lerp( Rotation, TargetRotation, Time.Delta * 5f );
-			var eyeRotSpeed = 10f; // Math.Clamp( vec.Length / 75f, 2.5f, 7.5f ); // The closer the Target, the harder it is to adjust
-			EyeRot = Rotation.Lerp( EyeRot, Rotation.LookAt( vec, Vector3.Up ), Time.Delta * eyeRotSpeed );
+			EyeRot += (Rotation - lastRot); // when our body rotates, so do our eyes
+
+			var tgt = Rotation.LookAt( vec, Vector3.Up );
+			if (TimeSinceTargetVisible >= 3f)
+				tgt += Rotation.FromYaw( Rotation.Yaw() + MathF.Sin( Time.Now * 2f ) * 75f );
+
+			EyeRot = Rotation.Lerp( EyeRot, tgt, Time.Delta * 15f );
 		}
 		else
 		{
 			var walkVelocity = Velocity.WithZ( 0 );
+			var turnSpeed = walkVelocity.Length.LerpInverse( 0, 100, true );
+			var targetRotation = Rotation.LookAt( walkVelocity.Normal, Vector3.Up );
+			var lastRot = Rotation;
 			if ( walkVelocity.Length > 0.5f )
 			{
-				var turnSpeed = walkVelocity.Length.LerpInverse( 0, 100, true );
-				var targetRotation = Rotation.LookAt( walkVelocity.Normal, Vector3.Up );
-				Rotation = Rotation.Lerp( Rotation, targetRotation, turnSpeed * Time.Delta * 20.0f );
+				if ( CurrentState == NpcState.Search )
+					Rotation = Rotation.Lerp( Rotation, Rotation.FromYaw( targetRotation.Yaw() + MathF.Cos( Time.Now / 2f ) * 45f ), Time.Delta * 5.0f );
+				else
+					Rotation = Rotation.Lerp( Rotation, targetRotation, turnSpeed * Time.Delta * 20.0f );
+				EyeRot += (Rotation - lastRot); // when our body rotates, so do our eyes
 			}
+			var tgt = Rotation.FromYaw( Rotation.Yaw() + MathF.Sin( Time.Now / 2f ) * 60f ); // look around slowly
+			EyeRot = Rotation.Lerp( EyeRot, tgt, Time.Delta * 10f );
 		}
 	}
 
 	protected override void NpcAnim()
 	{
 		var visible = CheckTargetVisiblity();
-		var lookPos = visible ? Target.EyePos : LastTargetPosition;
+		var lookPos = EyePos + EyeRot.Forward * 200; //visible ? Target.EyePos : (LastTargetPosition == Vector3.Zero ? EyePos + EyeRot.Forward * 200 : LastTargetPosition);
 
-		SetAnimLookAt( "aim_eyes", lookPos );
+		SetAnimLookAt( "aim_eyes", visible ? Target.EyePos : (LastTargetPosition == Vector3.Zero ? EyePos + EyeRot.Forward * 200 : LastTargetPosition) );
 		SetAnimLookAt( "aim_head", lookPos );
-		SetAnimLookAt( "aim_body", EyePos + EyeRot.Forward * 200 );
+		// SetAnimLookAt( "aim_body", EyePos + EyeRot.Forward * 200 );
+		SetAnimLookAt( "aim_body", Position + Rotation.Forward * 200 );
 		SetAnimFloat( "aim_body_weight", 0.5f );
 
 		SetAnimBool( "b_grounded", true );
@@ -527,7 +542,7 @@ class NpcGunner : NpcPawn //IStateMachine
 		SetAnimFloat( "move_direction", angle );
 
 		SetAnimFloat( "wishspeed", Velocity.Length * 1.5f );
-		SetAnimFloat( "walkspeed_scale", 1.0f / 10.0f );
+		SetAnimFloat( "walkspeed_scale", 1.0f / 10.0f * (Speed / 100) );
 		SetAnimFloat( "runspeed_scale", 1.0f / 320.0f );
 		SetAnimFloat( "duckspeed_scale", 1.0f / 80.0f );
 	}
