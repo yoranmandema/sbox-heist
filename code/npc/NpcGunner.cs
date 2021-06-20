@@ -51,14 +51,46 @@ class NpcStateTransition
 	}
 }
 
-class NpcGunner : NpcPawn //IStateMachine
+public struct NpcTargetInfo
+{
+	public NpcTargetInfo( Entity target )
+	{
+		Target = target;
+		LastPosition = Target.Position;
+		Enmity = 1;
+
+		TimeSinceVisible = 0;
+		TimeSinceReappear = 0;
+	}
+
+	public readonly Entity Target;
+	public Vector3 LastPosition;
+
+	// Total amount of damage dealt to us
+	public float Enmity;
+
+	public TimeSince TimeSinceVisible;
+	public TimeSince TimeSinceReappear;
+
+	public bool IsValid()
+	{
+		return Target != null && Target.IsValid();
+	}
+
+	public override string ToString()
+	{
+		return "(" + (IsValid() ? Target.ToString() : "INVALID") + ", " + Enmity + "enm, " + Math.Round(TimeSinceVisible, 1) + "tsv)";
+	}
+}
+
+class NpcGunner : NpcPawn
 {
 
 	[ConVar.Replicated]
-	public static bool npc_gunner_vision { get; set; }
+	public static bool npc_gunner_vision { get; set; } = true;
 
 	[ConVar.Replicated]
-	public static bool npc_gunner_nopatrol { get; set; }
+	public static bool npc_gunner_nopatrol { get; set; } = false;
 
 	[ServerCmd( "npc_gunner_dm" )] // sets them up to kill each other
 	public static void NpcBattleRoyale()
@@ -110,26 +142,72 @@ class NpcGunner : NpcPawn //IStateMachine
 
 	TimeSince TimeSincePathThink;
 	TimeSince TimeSinceVisCheck;
+	TimeSince TimeSinceScan;
 	bool LastVisCheck;
 
-	public Entity Target { get; protected set; }
-	public Vector3 LastTargetPosition { get; protected set; }
-	TimeSince TimeSinceTargetVisible;
-	TimeSince TimeSinceTargetReappear; // Give a small delay if target disappeared for a while. this will be more fair
+	public NpcTargetInfo Target;
+	public Dictionary<Entity, NpcTargetInfo> TargetList;
+	bool HasTarget()
+	{
+		return Target.IsValid();
+	}
+
+	// Alias for setting info values of the current target.
+	public Vector3 LastTargetPosition { 
+		get
+		{
+			if ( Target.IsValid() )
+				return Target.LastPosition;
+			return Vector3.Zero;
+		}
+		protected set
+		{
+			if ( Target.IsValid() )
+				Target.LastPosition = value;
+		}
+	}
+	public TimeSince TimeSinceTargetVisible
+	{
+		get
+		{
+			if ( Target.IsValid() )
+				return Target.TimeSinceVisible;
+			return 0f;
+		}
+		protected set
+		{
+			if ( Target.IsValid() )
+				Target.TimeSinceVisible = value;
+		}
+	}
+	public TimeSince TimeSinceTargetReappear
+	{
+		get
+		{
+			if ( Target.IsValid() )
+				return Target.TimeSinceReappear;
+			return 0f;
+		}
+		protected set
+		{
+			if ( Target.IsValid() )
+				Target.TimeSinceReappear = value;
+		}
+	}
 
 	// --------------------------------------------------
 	// State Machine Stuff
 	// --------------------------------------------------
 
 	Dictionary<NpcStateTransition, NpcState> transitions;
-	Dictionary<NpcEvent, Action<object>> eventFunc;
+	Dictionary<NpcEvent, Action<Entity>> eventFunc;
 
 	protected virtual void InitializeStates()
 	{
 		transitions = new Dictionary<NpcStateTransition, NpcState>
 		{
 			{ new NpcStateTransition(NpcState.Inactive, NpcEvent.Enable), NpcState.Idle },
-			{ new NpcStateTransition(NpcState.Idle, NpcEvent.Disable), NpcState.Inactive },
+			//{ new NpcStateTransition(NpcState.Idle, NpcEvent.Disable), NpcState.Inactive },
 
 			{ new NpcStateTransition(NpcState.Idle, NpcEvent.ResumePatrol), NpcState.Patrol },
 			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.PausePatrol), NpcState.Idle },
@@ -140,6 +218,7 @@ class NpcGunner : NpcPawn //IStateMachine
 			{ new NpcStateTransition(NpcState.Engage, NpcEvent.PushTarget), NpcState.Push },
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.PushTarget), NpcState.Push },
 
+			{ new NpcStateTransition(NpcState.Idle, NpcEvent.SeekTarget), NpcState.Search },
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.SeekTarget), NpcState.Search }, // a new unknown target might override our current one
 			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.SeekTarget), NpcState.Search },
 			{ new NpcStateTransition(NpcState.Push, NpcEvent.SeekTarget), NpcState.Search },
@@ -149,16 +228,16 @@ class NpcGunner : NpcPawn //IStateMachine
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.Disengage), NpcState.Patrol },
 		};
 
-		eventFunc = new Dictionary<NpcEvent, Action<object>>
+		eventFunc = new Dictionary<NpcEvent, Action<Entity>>
 		{
-			{ NpcEvent.Enable, obj => { SetTarget(null); SteerUpdate(); } },
+			{ NpcEvent.Enable, obj => SteerUpdate() },
 			// Disable is handled specially
 			{ NpcEvent.ResumePatrol, obj => SteerUpdate() },
 			{ NpcEvent.PausePatrol, obj => SteerUpdate() },
 			{ NpcEvent.GetTarget, obj => { SetTarget(obj); SteerUpdate(); } },
 			{ NpcEvent.PushTarget, obj => { SetTarget(obj); SteerUpdate(); } },
 			{ NpcEvent.SeekTarget, obj => { SetUnknownTarget(obj); SteerUpdate(); } },
-			{ NpcEvent.Disengage, obj => { SetTarget(null); SteerUpdate(); } },
+			{ NpcEvent.Disengage, obj => { ForgetTarget(); SteerUpdate(); } },
 
 		};
 	}
@@ -183,7 +262,7 @@ class NpcGunner : NpcPawn //IStateMachine
 		if ( command == NpcEvent.Disable )
 		{
 			CurrentState = NpcState.Inactive;
-			Target = null;
+			Target = default;
 			Steer = null;
 			return CurrentState;
 		}
@@ -199,11 +278,12 @@ class NpcGunner : NpcPawn //IStateMachine
 	protected virtual void SteerUpdate()
 	{
 		TimeSincePathThink = 0;
-		if ( Target != null )
+		if ( HasTarget() )
 		{
+			var ent = Target.Target;
 			// If we've seen our target recently, we know where they are;
 			// otherwise we can only proceed with last known pos
-			var tgtpos = TimeSinceTargetVisible < 2f ? Target.Position : LastTargetPosition;
+			var tgtpos = TimeSinceTargetVisible < 2f ? ent.Position : LastTargetPosition;
 			var dist = (tgtpos - Position).Length;
 			var closer = Position + (tgtpos - Position) * 0.5f;
 			if ( CurrentState == NpcState.Engage )
@@ -303,26 +383,26 @@ class NpcGunner : NpcPawn //IStateMachine
 
 	protected virtual void StateUpdate()
 	{
-		// TODO: check visual cone for enemies?
+		var ent = HasTarget() ? Target.Target : default;
 		if ( CurrentState == NpcState.Push )
 		{
-			if ( Target == null || Target.Health <= 0 || TimeSinceTargetVisible >= 5f )
+			if ( !HasTarget() || TimeSinceTargetVisible >= 5f )
 			{
 				// Lost target, hunt them down
-				FireEvent( NpcEvent.SeekTarget, Target );
+				FireEvent( NpcEvent.SeekTarget, ent );
 				return;
 			}
 		} else if ( CurrentState == NpcState.Engage )
 		{
-			if ( Target == null || Target.Health <= 0 || TimeSinceTargetVisible >= 8f )
+			if ( !HasTarget() || TimeSinceTargetVisible >= 8f )
 			{
 				// Enter patrol state (we don't want to actively look for them) 
-				FireEvent( NpcEvent.Disengage, null );
+				FireEvent( NpcEvent.Disengage, ent );
 				return;
-			} else if ( TimeSinceTargetVisible <= 2f && Target.Health <= Health * 0.75 )
+			} else if ( TimeSinceTargetVisible <= 2f && ent.Health <= Health * 0.75 )
 			{
 				// They're weak, let's push them!
-				FireEvent( NpcEvent.PushTarget, Target );
+				FireEvent( NpcEvent.PushTarget, ent );
 			}
 		}
 		else if ( CurrentState == NpcState.Search )
@@ -330,21 +410,25 @@ class NpcGunner : NpcPawn //IStateMachine
 			if ( TimeSinceTargetVisible >= 20f )
 			{
 				// Give up hunting
-				FireEvent( NpcEvent.Disengage, null );
+				FireEvent( NpcEvent.Disengage, ent );
 				return;
-			} else if ( TimeSinceTargetVisible <= 0.5f )
+			} else if ( TimeSinceTargetVisible <= 0 )
 			{
-				if ( Target == null || Target.Health <= 0 )
-					FireEvent( NpcEvent.Disengage, null );
-				else if ( Target.Health <= Health * 0.75 )
-					FireEvent( NpcEvent.PushTarget, Target );
+				if ( !HasTarget() || ent.Health <= 0 )
+					FireEvent( NpcEvent.Disengage, ent );
+				else if ( ent.Health <= Health * 0.75 )
+					FireEvent( NpcEvent.PushTarget, ent );
 				else
-					FireEvent( NpcEvent.SeekTarget, Target );
+					FireEvent( NpcEvent.SeekTarget, ent );
 			}
 		}
 		else if ( CurrentState == NpcState.Idle )
 		{
-			if ( !npc_gunner_nopatrol && TimeSincePathThink > 10f )
+			if ( HasTarget() )
+            {
+				FireEvent( NpcEvent.GetTarget, Target.Target );
+			}
+			else if ( !npc_gunner_nopatrol && TimeSincePathThink > 10f )
 			{
 				// Let's start patrolling!
 				FireEvent( NpcEvent.ResumePatrol, null );
@@ -353,96 +437,185 @@ class NpcGunner : NpcPawn //IStateMachine
 		}
 		else if ( CurrentState == NpcState.Patrol )
 		{
-			if ( TimeSincePathThink > 30f )
+			if ( HasTarget() )
+			{
+				FireEvent( NpcEvent.GetTarget, Target.Target );
+			}
+			else if( TimeSincePathThink > 30f )
 			{
 				// Let's stop for a bit
 				FireEvent( NpcEvent.PausePatrol, null );
 				return;
 			}
 		}
-	}
-
-	protected virtual void SetTarget(object obj)
-	{
-		// TODO: maybe we can prioritize different threats?
-		// TODO: store an array of known targets and their position?
-		if ( obj == null )
-		{
-			Target = null;
-			LastTargetPosition = Vector3.Zero;
-		}
-		else if ( obj is Entity )
-		{
-			Target = obj as Entity;
-			LastTargetPosition = Target.Position;
-		}
-	}
-
-	protected virtual void SetUnknownTarget( object obj )
-	{
-		if ( obj != null && Target != obj && obj is Entity )
-		{
-			Target = obj as Entity;
-			TimeSinceTargetVisible = -1f;
-			TimeSinceTargetReappear = -1f;
-			LastTargetPosition = Target.Position;
-		}
+		DebugOverlay.ScreenText( ToString() + " " + CurrentState.ToString() + " " + Target.ToString() );
 	}
 
 	// --------------------------------------------------
-	// AI Logic
+	// Targetting
 	// --------------------------------------------------
 
-	bool CheckTargetVisiblity()
+	protected virtual float CalculateEnmity( NpcTargetInfo info )
+	{
+		// TODO: target prioritization with enmity
+		return info.Enmity;
+	}
+	protected virtual void EvaluateTargets()
+	{
+		KeyValuePair<Entity, NpcTargetInfo> target = default;
+		var targetEnmity = -1f;
+
+		foreach ( KeyValuePair<Entity, NpcTargetInfo> pair in TargetList )
+		{
+
+			if ( !pair.Key.IsValid() || pair.Key.Health <= 0 )
+			{
+				TargetList.Remove( pair.Key );
+				continue;
+			}
+
+			var ourEnmity = CalculateEnmity( pair.Value );
+
+			if ( ourEnmity >= targetEnmity )
+			{
+				target = pair;
+				targetEnmity = ourEnmity;
+			}
+		}
+
+		if ( targetEnmity >= 0 && target.Key != Target.Target )
+		{
+			var info = target.Value;
+			info.TimeSinceReappear = 0.5f; // Delay when switching targets
+			Target = info;
+		}
+	}
+	protected virtual void ForgetTarget()
+	{
+		if ( !HasTarget() )
+			return;
+
+		var ent = Target.Target;
+		if ( ent.IsValid() && TargetList.ContainsKey( ent ) )
+		{
+			TargetList.Remove( ent );
+			if ( Target.Target == ent )
+				Target = default;
+		}
+	}
+	protected virtual void SetTarget( Entity ent )
+	{
+		if (!TargetList.ContainsKey(ent))
+		{
+			var info = new NpcTargetInfo( ent );
+			TargetList.Add( ent, info );
+		}
+	}
+	protected virtual void SetUnknownTarget( Entity ent )
+	{
+		if ( ent != null && (!HasTarget() || Target.Target != ent) && !TargetList.ContainsKey( ent ) )
+		{
+			var info = new NpcTargetInfo( ent );
+			info.TimeSinceVisible = -1f;
+			info.TimeSinceReappear = -1f;
+			TargetList.Add( ent, info );
+		}
+	}
+	protected virtual bool CheckVisibility( Entity ent, bool reducedVision = false )
+	{
+		if ( ent == null || !ent.IsValid() || ent.Health <= 0 )
+			return false;
+
+		var dist = (ent.Position - Position).Length;
+		var angdiff = EyeRot.Distance( Rotation.LookAt( ent.EyePos - EyePos, Vector3.Up ) );
+		if ( dist > (reducedVision ? 150f : 250f) && angdiff >= (reducedVision ? 75f : 100f) )
+			return false;
+
+		var tr = Trace.Ray( EyePos, ent.EyePos )
+			.Ignore( Owner )
+			.Ignore( this )
+			.Run();
+
+		if ( tr.Entity != ent )
+			return false;
+
+		return true;
+	}
+	protected virtual bool CheckTargetVisiblity()
 	{
 		// TODO: maybe this can trigger less often for performance?
 		if ( TimeSinceVisCheck == 0 ) return LastVisCheck;
+		LastVisCheck = false;
+		var bestVisible = Target;
+		var bestEnmity = HasTarget() ? CalculateEnmity( Target ) : -1;
 
-		if ( Target == null || Target.Health <= 0 )
+		using ( Sandbox.Debug.Profile.Scope( "Gunner Visibility" ) )
 		{
-			Target = null;
-			LastVisCheck = false;
-		}
-		else
-		{
-			var dist = (Target.Position - Position).Length;
-			var angdiff = EyeRot.Distance( Rotation.LookAt( Target.EyePos - EyePos, Vector3.Up ) );
-			if ( dist > (TimeSinceTargetVisible > 2f ? 150f : 250f) && angdiff >= (TimeSinceTargetVisible > 2f ? 75f : 100f) ) {
-				// can only see in front; but up close we get some situational awareness
-				// our visibility gets a nerf if we haven't seen the target for a bit; this allows them to sneak up on us
-				LastVisCheck = false;
-			} else
+			foreach ( KeyValuePair<Entity, NpcTargetInfo> pair in TargetList )
 			{
-				var tr = Trace.Ray( EyePos, Target.EyePos )
-							.UseHitboxes()
-							.Ignore( Owner )
-							.Ignore( this )
-							.Run();
-				if ( tr.Entity != Target )
+				var ent = pair.Key;
+				var info = pair.Value;
+				var visible = CheckVisibility( ent, info.TimeSinceVisible >= 2f );
+				if ( visible )
 				{
-					LastVisCheck = false;
-				}
-				else // We can see the target!
-				{
-					// give a slight "reaction delay"
-					if ( TimeSinceTargetReappear > 0 ) TimeSinceTargetReappear = -1 * Math.Clamp( (TimeSinceTargetVisible - 1) / 3f, 0, 1f );
+					if ( info.TimeSinceReappear > 0 ) info.TimeSinceReappear = -1 * Math.Clamp( (info.TimeSinceVisible - 1) / 3f, 0, 1f );
+					info.TimeSinceVisible = 0;
 
-					TimeSinceTargetVisible = 0;
-					LastTargetPosition = Target.Position;
-					LastVisCheck = true;
+					if ( ent == Target.Target )
+						LastVisCheck = true;
+
+					var enmity = CalculateEnmity( info );
+					if ( bestVisible.IsValid() || enmity > bestEnmity * 2f )
+					{
+						bestVisible = info;
+						bestEnmity = enmity;
+						LastVisCheck = true;
+					}
 				}
 			}
 		}
+
+		Target = bestVisible;
 
 		// This caches the result for one tick (hopefully)
 		TimeSinceVisCheck = 0;
 		return LastVisCheck;
 	}
-
-	void ScanForTargets()
+	protected virtual void ScanForTargets()
 	{
-		
+		if ( !npc_gunner_vision ) return;
+		TimeSinceScan = 0;
+		var acquire = false;
+		foreach ( Entity ent in Physics.GetEntitiesInSphere( Position, 2000f ) )
+		{
+			if ( ent is Player && CheckVisibility( ent, true ) )
+			{
+				if ( TargetList.ContainsKey( ent ) )
+				{
+					var info = TargetList[ent];
+					info.TimeSinceVisible = 0;
+				}
+				else
+				{
+					var info = new NpcTargetInfo( ent );
+					info.TimeSinceVisible = 0;
+					info.TimeSinceReappear = 1f; // first time getting you, let's be lenient
+					TargetList.Add( ent, info );
+					if ( !acquire && (CurrentState == NpcState.Idle || CurrentState == NpcState.Patrol || CurrentState == NpcState.Search) )
+					{
+						// if we found one target, go into engage mode
+						FireEvent( NpcEvent.GetTarget, ent );
+						acquire = true;
+					}
+				}
+			}
+		}
+
 	}
+
+	// --------------------------------------------------
+	// AI Logic
+	// --------------------------------------------------
 
 	public override void Spawn()
 	{
@@ -450,11 +623,15 @@ class NpcGunner : NpcPawn //IStateMachine
 
 		InitializeStates();
 
+		TimeSinceVisCheck = 0;
+		TimeSincePathThink = 0;
+
+		Target = default;
+		TargetList = new Dictionary<Entity, NpcTargetInfo> { };
 		CurrentState = NpcState.Idle;
-		LastTargetPosition = Vector3.Zero;
 
 		// TODO: better way to set NPC weapons
-		Weapon = new Shotgun(); //new NpcWeaponPistol();
+		Weapon = new Pistol();
 		Weapon.OnCarryStart( this );
 		Weapon.ActiveStart( this );
 
@@ -464,20 +641,23 @@ class NpcGunner : NpcPawn //IStateMachine
 	protected override void NpcThink()
 	{
 		var visible = CheckTargetVisiblity();
+		if (TimeSinceScan >= 1f) ScanForTargets();
 
 		StateUpdate();
 
-		if ( Target != null && TimeSincePathThink > 3f )
+		var ent = Target.Target;
+
+		if ( HasTarget() && TimeSincePathThink > 3f )
 		{
 			SteerUpdate();
 		}
 
 		// Shoot the target!
-		if ( Target != null && visible )
+		if ( HasTarget() && visible )
 		{
 			SetAnimInt( "holdtype", Weapon.HoldType );
-			var angdiff = Rotation.Distance( Rotation.LookAt( Target.Position - Position, Vector3.Up ) );
-			if ( Weapon != null && angdiff <= 15f && TimeSinceTargetReappear >= 0 )
+			var angdiff = Rotation.Distance( Rotation.LookAt( ent.Position - Position, Vector3.Up ) );
+			if ( Weapon != null && angdiff <= 15f && TimeSinceTargetReappear <= 1f ) // we can fire right as they disappear for a second
 			{
 				if ( Weapon.CanPrimaryAttack() && ( Weapon.Automatic || Weapon.TimeSincePrimaryAttack > ( 1 / WeaponSemiRate ) ) )
 				{
@@ -490,7 +670,7 @@ class NpcGunner : NpcPawn //IStateMachine
 				}
 			}
 		}
-		else if ( Target == null )
+		else if ( !HasTarget() )
 		{
 			if ( Weapon.CanReload() && Weapon.AmmoClip < Weapon.ClipSize )
 			{
@@ -502,18 +682,21 @@ class NpcGunner : NpcPawn //IStateMachine
 
 	protected override void NpcTurn()
 	{
-		var visible = CheckTargetVisiblity();
 		if ( LastTargetPosition != Vector3.Zero )
 		{
 			Vector3 vec;
-			if ( visible && TimeSinceTargetReappear >= 0 )
+			if ( HasTarget() && TimeSinceTargetReappear <= 0 )
 			{
-				vec = Target.Position - Position;
+				vec = Target.Target.Position - Position;
+				LookDir = Target.Target.EyePos;
 				// var dist = vec.Length; // Overcompensate for target velocity
 				// vec += Target.Velocity * 0.5f * Math.Clamp( 1 - dist / 800, 0, 1 );
 			}
 			else
+			{
 				vec = LastTargetPosition - Position;
+				LookDir = LastTargetPosition + (EyePos - Position);
+			}
 
 			var TargetRotation = Rotation.LookAt( vec.WithZ( 0 ), Vector3.Up );
 			var eyeRotSpeed = 15f;
@@ -560,12 +743,8 @@ class NpcGunner : NpcPawn //IStateMachine
 
 	protected override void NpcAnim()
 	{
-		var visible = CheckTargetVisiblity();
-		var lookPos = EyePos + EyeRot.Forward * 200; //visible ? Target.EyePos : (LastTargetPosition == Vector3.Zero ? EyePos + EyeRot.Forward * 200 : LastTargetPosition);
-
-		SetAnimLookAt( "aim_eyes", visible ? Target.EyePos : (LastTargetPosition == Vector3.Zero ? EyePos + EyeRot.Forward * 200 : LastTargetPosition) );
-		SetAnimLookAt( "aim_head", lookPos );
-		// SetAnimLookAt( "aim_body", EyePos + EyeRot.Forward * 200 );
+		SetAnimLookAt( "aim_eyes", EyePos + LookDir * 200 );
+		SetAnimLookAt( "aim_head", EyePos + EyeRot.Forward * 200 );
 		SetAnimLookAt( "aim_body", Position + Rotation.Forward * 200 );
 		SetAnimFloat( "aim_body_weight", 1f );
 
@@ -586,10 +765,32 @@ class NpcGunner : NpcPawn //IStateMachine
 
 	public override void TakeDamage( DamageInfo info )
 	{
+
+		if ( CurrentState == NpcState.Idle || CurrentState == NpcState.Patrol )
+		{
+			// sneak attack!
+			info.Damage = info.Damage * 2;
+		}
+
 		base.TakeDamage( info );
+		var attacker = info.Attacker;
+
+		if ( attacker == null || attacker == this ) return;
+
+		if ( TargetList.ContainsKey(attacker) )
+		{
+			var targetInfo = TargetList[attacker];
+			targetInfo.Enmity += info.Damage;
+			targetInfo.LastPosition = attacker.Position; // attacking reveals position. kind of unfair?
+		} else
+		{
+			var targetInfo = new NpcTargetInfo( attacker );
+			targetInfo.Enmity = info.Damage;
+			TargetList.Add( attacker, targetInfo );
+		}
 		if (CurrentState == NpcState.Idle || CurrentState == NpcState.Patrol || CurrentState == NpcState.Search)
 		{
-			FireEvent( NpcEvent.SeekTarget, info.Attacker );
+			FireEvent( NpcEvent.SeekTarget, attacker );
 		}
 	}
 }
