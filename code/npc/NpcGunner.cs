@@ -95,27 +95,21 @@ class NpcGunner : NpcPawn
 	[ServerCmd( "npc_gunner_dm" )] // sets them up to kill each other
 	public static void NpcBattleRoyale()
 	{
-		var arr = Entity.All.OfType<NpcGunner>().ToArray();
+		var arr = All.OfType<NpcGunner>().ToArray();
 		if ( arr.Length <= 1 ) return;
-
-		Random random = new Random();
 
 		foreach ( var npc in arr )
 		{
-			var tgt = random.Next(0, arr.Length);
-			if ( arr[tgt] == npc ) tgt = (tgt + 1) % arr.Length;
-			npc.FireEvent( NpcEvent.SeekTarget, arr[tgt] );
-		}
-	}
-
-	[ServerCmd( "npc_gunner_seekplayer" )] // sets them up to hunt the player
-	public static void NpcSeekPlayer()
-	{
-		var plys = All.OfType<Player>().ToArray();
-		Random random = new Random();
-		foreach ( var npc in All.OfType<NpcGunner>().ToArray() )
-		{
-			npc.FireEvent( NpcEvent.SeekTarget, plys[random.Next( 0, plys.Length )] );
+			//var tgt = random.Next(0, arr.Length);
+			//if ( arr[tgt] == npc ) tgt = (tgt + 1) % arr.Length;
+			//npc.FireEvent( NpcEvent.SeekTarget, arr[tgt] );
+			foreach ( var npc2 in arr )
+			{
+				if (npc != npc2)
+				{
+					npc.TargetList.Add( npc2, new NpcTargetInfo( npc2 ) );
+				}
+			}
 		}
 	}
 
@@ -166,7 +160,7 @@ class NpcGunner : NpcPawn
 				Target.LastPosition = value;
 		}
 	}
-	public TimeSince TimeSinceTargetVisible
+	public float TimeSinceTargetVisible
 	{
 		get
 		{
@@ -180,7 +174,7 @@ class NpcGunner : NpcPawn
 				Target.TimeSinceVisible = value;
 		}
 	}
-	public TimeSince TimeSinceTargetReappear
+	public float TimeSinceTargetReappear
 	{
 		get
 		{
@@ -486,7 +480,7 @@ class NpcGunner : NpcPawn
 		if ( targetEnmity >= 0 && target.Key != Target.Target )
 		{
 			var info = target.Value;
-			info.TimeSinceReappear = 0.5f; // Delay when switching targets
+			info.TimeSinceReappear = -0.5f; // Delay when switching targets
 			Target = info;
 		}
 	}
@@ -546,8 +540,10 @@ class NpcGunner : NpcPawn
 		// TODO: maybe this can trigger less often for performance?
 		if ( TimeSinceVisCheck == 0 ) return LastVisCheck;
 		LastVisCheck = false;
+		var lastTarget = Target;
 		var bestVisible = Target;
 		var bestEnmity = HasTarget() ? CalculateEnmity( Target ) : -1;
+		var bestTimeSince = 0f;
 
 		using ( Sandbox.Debug.Profile.Scope( "Gunner Visibility" ) )
 		{
@@ -558,8 +554,6 @@ class NpcGunner : NpcPawn
 				var visible = CheckVisibility( ent, info.TimeSinceVisible >= 2f );
 				if ( visible )
 				{
-					if ( info.TimeSinceReappear > 0 ) info.TimeSinceReappear = -1 * Math.Clamp( (info.TimeSinceVisible - 1) / 3f, 0, 1f );
-					info.TimeSinceVisible = 0;
 
 					if ( ent == Target.Target )
 						LastVisCheck = true;
@@ -567,15 +561,20 @@ class NpcGunner : NpcPawn
 					var enmity = CalculateEnmity( info );
 					if ( bestVisible.IsValid() || enmity > bestEnmity * 2f )
 					{
+						bestTimeSince = info.TimeSinceVisible;
 						bestVisible = info;
+						bestVisible.TimeSinceVisible = 0;
 						bestEnmity = enmity;
 						LastVisCheck = true;
 					}
+					info.TimeSinceVisible = 0;
 				}
 			}
 		}
 
 		Target = bestVisible;
+		if ( lastTarget.Target != bestVisible.Target )
+			Target.TimeSinceReappear = -1 * Math.Clamp( (bestTimeSince - 1) / 3f, 0, 1f );
 
 		// This caches the result for one tick (hopefully)
 		TimeSinceVisCheck = 0;
@@ -599,7 +598,7 @@ class NpcGunner : NpcPawn
 				{
 					var info = new NpcTargetInfo( ent );
 					info.TimeSinceVisible = 0;
-					info.TimeSinceReappear = 1f; // first time getting you, let's be lenient
+					info.TimeSinceReappear = -1f; // first time getting you, let's be lenient
 					TargetList.Add( ent, info );
 					if ( !acquire && (CurrentState == NpcState.Idle || CurrentState == NpcState.Patrol || CurrentState == NpcState.Search) )
 					{
@@ -656,10 +655,13 @@ class NpcGunner : NpcPawn
 		if ( HasTarget() && visible )
 		{
 			SetAnimInt( "holdtype", Weapon.HoldType );
-			var angdiff = Rotation.Distance( Rotation.LookAt( ent.Position - Position, Vector3.Up ) );
-			if ( Weapon != null && angdiff <= 15f && TimeSinceTargetReappear <= 1f ) // we can fire right as they disappear for a second
+
+			if ( Weapon != null ) // we can fire right as they disappear for a second
 			{
-				if ( Weapon.CanPrimaryAttack() && ( Weapon.Automatic || Weapon.TimeSincePrimaryAttack > ( 1 / WeaponSemiRate ) ) )
+				Log.Info( TimeSinceTargetReappear + " " + TimeSinceTargetVisible );
+				var angdiff = Rotation.Distance( Rotation.LookAt( ent.Position - Position, Vector3.Up ) );
+				if (angdiff <= 15f && TimeSinceTargetReappear >= 0f && TimeSinceTargetVisible <= 1f &&
+						Weapon.CanPrimaryAttack() && ( Weapon.Automatic || Weapon.TimeSincePrimaryAttack > ( 1 / WeaponSemiRate ) ) )
 				{
 					Weapon.AttackPrimary();
 					// DebugOverlay.Line( EyePos, EyePos + EyeRot.Forward * 1000, 3 );
@@ -685,7 +687,7 @@ class NpcGunner : NpcPawn
 		if ( LastTargetPosition != Vector3.Zero )
 		{
 			Vector3 vec;
-			if ( HasTarget() && TimeSinceTargetReappear <= 0 )
+			if ( HasTarget() && TimeSinceTargetReappear >= 0 )
 			{
 				vec = Target.Target.Position - Position;
 				LookDir = Target.Target.EyePos;
