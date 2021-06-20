@@ -16,6 +16,8 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public virtual int Bucket => 1;
 	public virtual int BucketWeight => 100;
 	public virtual float SprintOutTime => 0.5f;
+	public virtual bool Automatic => true;
+	public virtual int HoldType => 1; // this is shit indeed
 
 	[Net, Predicted] public int AmmoClip { get; set; }
 	[Net, Predicted] public TimeSince TimeSinceReload { get; set; }
@@ -48,7 +50,6 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public override void ActiveStart( Entity ent )
 	{
 		base.ActiveStart( ent );
-
 		TimeSinceDeployed = 0;
 	}
 
@@ -59,10 +60,17 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		base.Spawn();
 
 		SetModel( "weapons/rust_pistol/rust_pistol.vmdl" );
+		AmmoClip = ClipSize;
 
 		PickupTrigger = new PickupTrigger();
 		PickupTrigger.Parent = this;
 		PickupTrigger.Position = Position;
+	}
+
+	public override bool CanReload()
+	{
+		if ( !Owner.IsValid() || (Owner is Player && !Input.Down( InputButton.Reload )) || (Owner is NpcPawn && IsReloading) ) return false;
+		return true;
 	}
 
 	public override void Reload()
@@ -81,6 +89,9 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 				return;
 
 			StartReloadEffects();
+		} else if (Owner is NpcPawn)
+		{
+			AsyncReload();
 		}
 
 		IsReloading = true;
@@ -130,6 +141,17 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		}
 	}
 
+	// Used on NPC weapons, who do not call Simulate(cl)
+	public virtual async void AsyncReload()
+	{
+		await Task.DelaySeconds( ReloadTime );
+		OnReloadFinish();
+		var diff = ReloadFinishTime - ReloadTime;
+		if (diff > 0)
+			await Task.DelaySeconds( diff );
+		IsReloading = false;
+	}
+
 	[ClientRpc]
 	public virtual void StartReloadEffects()
 	{
@@ -138,6 +160,15 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		// TODO - player third person model reload
 	}
 
+	public override bool CanPrimaryAttack()
+	{
+		if ( !Owner.IsValid() || (Owner is Player && ((Automatic && !Input.Down( InputButton.Attack1 ) || (!Automatic && !Input.Pressed( InputButton.Attack1 ))))) || (Owner is NpcPawn && IsReloading) ) return false;
+
+		var rate = PrimaryRate;
+		if ( rate <= 0 ) return true;
+
+		return TimeSincePrimaryAttack > (1 / rate);
+	}
 	public override void AttackPrimary()
 	{
 		TimeSincePrimaryAttack = 0;
@@ -289,7 +320,6 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 			PickupTrigger.EnableTouch = false;
 		}
 	}
-
 	public override void OnCarryDrop( Entity dropper )
 	{
 		base.OnCarryDrop( dropper );
@@ -300,4 +330,9 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		}
 	}
 
+	public override void SimulateAnimator( PawnAnimator anim )
+	{
+		anim.SetParam( "holdtype", HoldType );
+		anim.SetParam( "aimat_weight", 1.0f );
+	}
 }

@@ -11,15 +11,14 @@ partial class Shotgun : BaseHeistWeapon
 	public override int ClipSize => 8;
 	public override float ReloadTime => 0.5f;
 	public override int Bucket => 2;
+	public override int HoldType => 2;
 
 	public override void Spawn()
 	{
 		base.Spawn();
 
 		SetModel( "weapons/rust_pumpshotgun/rust_pumpshotgun.vmdl" );  
-
-
-		AmmoClip = 6;
+		AmmoClip = ClipSize;
 	}
 
 	public override void CreateViewModel () {
@@ -151,6 +150,11 @@ partial class Shotgun : BaseHeistWeapon
 			{
 				FinishReload();
 			}
+		} else if ( Owner is NpcPawn )
+		{
+			AmmoClip++;
+			if ( AmmoClip < ClipSize )
+				Reload();
 		}
 	}
 

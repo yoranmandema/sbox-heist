@@ -55,6 +55,9 @@ class NpcGunner : NpcPawn //IStateMachine
 {
 
 	[ConVar.Replicated]
+	public static bool npc_gunner_vision { get; set; }
+
+	[ConVar.Replicated]
 	public static bool npc_gunner_nopatrol { get; set; }
 
 	[ServerCmd( "npc_gunner_dm" )] // sets them up to kill each other
@@ -88,7 +91,10 @@ class NpcGunner : NpcPawn //IStateMachine
 	// Variables
 	// --------------------------------------------------
 
-	protected BaseNpcWeapon Weapon;
+	public BaseHeistWeapon Weapon { get; protected set; }
+
+	// The rate at which we will fire semi-automatic weapons.
+	protected float WeaponSemiRate = 4f;
 
 	protected float PatrolSpeed = 80f;
 	protected float CombatSpeed = 150f;
@@ -262,11 +268,18 @@ class NpcGunner : NpcPawn //IStateMachine
 				}
 
 				Vector3? pos;
+				
 				if ( LastTargetPosition == Vector3.Zero )
 				{
 					// We can see the last known position. Let's look around instead
 					pos = NavMesh.GetPointWithinRadius( Position, 200f, 400f );
-				} else
+				}
+				else if ( TimeSinceTargetVisible < 0 )
+				{
+					// We need to investigate the last known position directly and now
+					pos = LastTargetPosition;
+				}
+				else
 				{
 					// Approach last known position
 					pos = NavMesh.GetPointWithinRadius( tgtpos, 100f, 200f );
@@ -370,7 +383,7 @@ class NpcGunner : NpcPawn //IStateMachine
 		if ( obj != null && Target != obj && obj is Entity )
 		{
 			Target = obj as Entity;
-			TimeSinceTargetVisible = 10f;
+			TimeSinceTargetVisible = -1f;
 			TimeSinceTargetReappear = -1f;
 			LastTargetPosition = Target.Position;
 		}
@@ -380,7 +393,7 @@ class NpcGunner : NpcPawn //IStateMachine
 	// AI Logic
 	// --------------------------------------------------
 
-	protected bool CheckTargetVisiblity()
+	bool CheckTargetVisiblity()
 	{
 		// TODO: maybe this can trigger less often for performance?
 		if ( TimeSinceVisCheck == 0 ) return LastVisCheck;
@@ -426,6 +439,11 @@ class NpcGunner : NpcPawn //IStateMachine
 		return LastVisCheck;
 	}
 
+	void ScanForTargets()
+	{
+		
+	}
+
 	public override void Spawn()
 	{
 		base.Spawn();
@@ -436,8 +454,10 @@ class NpcGunner : NpcPawn //IStateMachine
 		LastTargetPosition = Vector3.Zero;
 
 		// TODO: better way to set NPC weapons
-		Weapon = new NpcWeaponPistol();
+		Weapon = new Shotgun(); //new NpcWeaponPistol();
 		Weapon.OnCarryStart( this );
+		Weapon.ActiveStart( this );
+
 		Speed = PatrolSpeed;
 	}
 
@@ -455,13 +475,14 @@ class NpcGunner : NpcPawn //IStateMachine
 		// Shoot the target!
 		if ( Target != null && visible )
 		{
-			SetAnimInt( "holdtype", 1 );
+			SetAnimInt( "holdtype", Weapon.HoldType );
 			var angdiff = Rotation.Distance( Rotation.LookAt( Target.Position - Position, Vector3.Up ) );
 			if ( Weapon != null && angdiff <= 15f && TimeSinceTargetReappear >= 0 )
 			{
-				if ( Weapon.CanPrimaryAttack() )
+				if ( Weapon.CanPrimaryAttack() && ( Weapon.Automatic || Weapon.TimeSincePrimaryAttack > ( 1 / WeaponSemiRate ) ) )
 				{
 					Weapon.AttackPrimary();
+					// DebugOverlay.Line( EyePos, EyePos + EyeRot.Forward * 1000, 3 );
 				}
 				else if ( Weapon.CanReload() && Weapon.AmmoClip == 0 )
 				{
@@ -475,7 +496,7 @@ class NpcGunner : NpcPawn //IStateMachine
 			{
 				Weapon.Reload(); // never hurts to top it off
 			}
-			SetAnimInt( "holdtype", Weapon.IsReloading ? 1 : 0 );
+			SetAnimInt( "holdtype", Weapon.IsReloading ? Weapon.HoldType : 0 );
 		}
 	}
 
@@ -486,21 +507,37 @@ class NpcGunner : NpcPawn //IStateMachine
 		{
 			Vector3 vec;
 			if ( visible && TimeSinceTargetReappear >= 0 )
+			{
 				vec = Target.Position - Position;
+				// var dist = vec.Length; // Overcompensate for target velocity
+				// vec += Target.Velocity * 0.5f * Math.Clamp( 1 - dist / 800, 0, 1 );
+			}
 			else
 				vec = LastTargetPosition - Position;
 
 			var TargetRotation = Rotation.LookAt( vec.WithZ( 0 ), Vector3.Up );
-			//var eyeRotSpeed = Math.Clamp( vec.Length / 75f, 2.5f, 7.5f ); // The closer the Target, the harder it is to adjust
+			var eyeRotSpeed = 15f;
 			var lastRot = Rotation;
 			Rotation = Rotation.Lerp( Rotation, TargetRotation, Time.Delta * 5f );
 			EyeRot += (Rotation - lastRot); // when our body rotates, so do our eyes
 
 			var tgt = Rotation.LookAt( vec, Vector3.Up );
 			if (TimeSinceTargetVisible >= 3f)
+			{
+				// Add some head movement since we're looking around for the target
 				tgt += Rotation.FromYaw( Rotation.Yaw() + MathF.Sin( Time.Now * 2f ) * 75f );
+			}
+			else
+			{
+				// Add sway to imitate inperfect aim, otherwise we're just an aimbot!
+				tgt.x += MathF.Sin( Time.Now / 2f ) * Time.Delta * 0.5f;
+				tgt.y += MathF.Cos( Time.Now / 2f ) * Time.Delta * 0.25f;
 
-			EyeRot = Rotation.Lerp( EyeRot, tgt, Time.Delta * 15f );
+				// Slow down when aiming towards far away targets. this gives the player some opportunity to dodge
+				eyeRotSpeed *= (1 - 0.5f * Math.Clamp( vec.Length / 1000f, 0f, 1f ));
+			}
+
+			EyeRot = Rotation.Lerp( EyeRot, tgt, Time.Delta * eyeRotSpeed );
 		}
 		else
 		{
@@ -530,7 +567,7 @@ class NpcGunner : NpcPawn //IStateMachine
 		SetAnimLookAt( "aim_head", lookPos );
 		// SetAnimLookAt( "aim_body", EyePos + EyeRot.Forward * 200 );
 		SetAnimLookAt( "aim_body", Position + Rotation.Forward * 200 );
-		SetAnimFloat( "aim_body_weight", 0.5f );
+		SetAnimFloat( "aim_body_weight", 1f );
 
 		SetAnimBool( "b_grounded", true );
 		SetAnimBool( "b_noclip", false );

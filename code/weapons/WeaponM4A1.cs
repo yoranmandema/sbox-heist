@@ -18,6 +18,7 @@ partial class WeaponM4A1 : BaseHeistWeapon
 
 	public override float ReloadFinishTime => 3.5f;
 	public override int Bucket => 2;
+	public override int HoldType => 2;
 
 	public override void Spawn()
 	{

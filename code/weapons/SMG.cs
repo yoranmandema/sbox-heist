@@ -11,6 +11,7 @@ partial class SMG : BaseHeistWeapon
 	public override int ClipSize => 30;
 	public override float ReloadTime => 4.0f;
 	public override int Bucket => 2;
+	public override int HoldType => 2;
 
 	public override void Spawn()
 	{
@@ -76,11 +77,4 @@ partial class SMG : BaseHeistWeapon
 
 		CrosshairPanel?.OnEvent( "fire" );
 	}
-
-	public override void SimulateAnimator( PawnAnimator anim )
-	{
-		anim.SetParam( "holdtype", 2 ); // TODO this is shit
-		anim.SetParam( "aimat_weight", 1.0f );
-	}
-
 }
