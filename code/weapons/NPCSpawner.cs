@@ -19,12 +19,6 @@ partial class NPCSpawner : BaseHeistWeapon
 
 	public override void AttackPrimary()
 	{
-		if ( !TakeAmmo( 1 ) )
-		{
-			DryFire();
-			return;
-		}
-
 		ShootEffects();
 
 		if ( IsServer )
@@ -43,9 +37,45 @@ partial class NPCSpawner : BaseHeistWeapon
 						Position = tr.EndPos,
 						Rotation = Owner.Rotation,
 					};
+					var path = new Sandbox.Nav.Patrol();
+					path.PatrolStart = tr.EndPos;
+					path.PatrolEnd = Owner.Position;
+					path.PatrolDelay = 10f;
+					pawn.AddPatrolPath(path);
 				}
 			}
 	}
+
+	/*
+	public override void AttackSecondary()
+	{
+		ShootEffects();
+
+		if (IsServer)
+			using (Prediction.Off())
+			{
+
+				var startPos = Owner.EyePos;
+				var dir = Owner.EyeRot.Forward;
+				var tr = Trace.Ray(startPos, startPos + dir * 10000)
+					.Ignore(Owner)
+					.Run();
+				if (tr.Hit)
+				{
+					var pawn = new NpcGunner
+					{
+						Position = tr.EndPos,
+						Rotation = Owner.Rotation,
+					};
+					var path = new Sandbox.Nav.Patrol();
+					path.PatrolStart = tr.EndPos;
+					path.PatrolEnd = Owner.Position;
+					path.PatrolDelay = 10f;
+					pawn.AddPatrolPath(path);
+				}
+			}
+	}
+	*/
 
 	[ClientRpc]
 	protected override void ShootEffects()

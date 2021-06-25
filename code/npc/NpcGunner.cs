@@ -87,6 +87,9 @@ class NpcGunner : NpcPawn
 {
 
 	[ConVar.Replicated]
+	public static float npc_gunner_vision_frequency { get; set; } = 0.5f;
+
+	[ConVar.Replicated]
 	public static bool npc_gunner_vision { get; set; } = true;
 
 	[ConVar.Replicated]
@@ -268,113 +271,6 @@ class NpcGunner : NpcPawn
 		}
 		return CurrentState;
 	}
-
-	protected virtual void SteerUpdate()
-	{
-		TimeSincePathThink = 0;
-		if ( HasTarget() )
-		{
-			var ent = Target.Target;
-			// If we've seen our target recently, we know where they are;
-			// otherwise we can only proceed with last known pos
-			var tgtpos = TimeSinceTargetVisible < 2f ? ent.Position : LastTargetPosition;
-			var dist = (tgtpos - Position).Length;
-			var closer = Position + (tgtpos - Position) * 0.5f;
-			if ( CurrentState == NpcState.Engage )
-			{
-				// We are in engage mode. Speed up and wander nearby (like strafing)
-				Speed = CombatSpeed;
-
-				if ( dist > MaxCombatDistance )
-				{
-					// If we are not close, try to find a position in between the target and ourselves
-					var distmult = Math.Clamp( dist / 400, 1, 3 );
-					var pos = NavMesh.GetPointWithinRadius( closer, 100f * distmult, 200f * distmult );
-					Steer = new NavSteer();
-					if ( !pos.HasValue )
-						Steer.Target = tgtpos;
-					else
-						Steer.Target = (Vector3)pos;
-				} else
-				{
-					Sandbox.Nav.Wander wander = new Sandbox.Nav.Wander();
-					wander.MinRadius = 40f;
-					wander.MaxRadius = 100f;
-					Steer = wander;
-				}
-			}
-			else if ( CurrentState == NpcState.Push )
-			{
-				// We are pushing. Let's get in some trouble and die for the player's amusement!
-				Speed = CombatSpeed;
-
-				Vector3? pos;
-				if ( dist > PushCombatDistance )
-				{
-					// If we are not close, try to find a position in between the target and ourselves
-					var distmult = Math.Clamp( dist / 300, 1, 3 );
-					pos = NavMesh.GetPointWithinRadius( closer, 100f * distmult, 200f * distmult );
-				}
-				else
-				{
-					// We are close enough. Let's do some shadow dancing
-					pos = NavMesh.GetPointWithinRadius( tgtpos, MinCombatDistance, Math.Max( MinCombatDistance * 1.5f, PushCombatDistance * 0.75f ) );
-				}
-
-				Steer = new NavSteer();
-				if (!pos.HasValue)
-					Steer.Target = tgtpos;
-				else
-					Steer.Target = (Vector3)pos;
-
-			} else if ( CurrentState == NpcState.Search )
-			{
-				// We lost track of the target.
-				Speed = (CombatSpeed + PatrolSpeed) / 2;
-				if ( LastTargetPosition != Vector3.Zero )
-				{
-					var tr = Trace.Ray( EyePos, tgtpos )
-						.Ignore( Owner )
-						.Ignore( this )
-						.Run();
-					if ( tr.Fraction >= 0.9 )
-						LastTargetPosition = Vector3.Zero;
-				}
-
-				Vector3? pos;
-				
-				if ( LastTargetPosition == Vector3.Zero )
-				{
-					// We can see the last known position. Let's look around instead
-					pos = NavMesh.GetPointWithinRadius( Position, 200f, 400f );
-				}
-				else if ( TimeSinceTargetVisible < 0 )
-				{
-					// We need to investigate the last known position directly and now
-					pos = LastTargetPosition;
-				}
-				else
-				{
-					// Approach last known position
-					pos = NavMesh.GetPointWithinRadius( tgtpos, 100f, 200f );
-				}
-
-				Steer = new NavSteer();
-				if ( !pos.HasValue )
-					Steer.Target = tgtpos;
-				else
-					Steer.Target = (Vector3)pos;
-
-			}
-		} else
-		{
-			Speed = PatrolSpeed;
-			Steer = null; // this will also stop the NPC when in idle or disabled state
-			if ( CurrentState == NpcState.Patrol )
-				Steer = new Sandbox.Nav.Wander(); // patrol normally
-		}
-	}
-
 	protected virtual void StateUpdate()
 	{
 		var ent = HasTarget() ? Target.Target : default;
@@ -416,6 +312,7 @@ class NpcGunner : NpcPawn
 					FireEvent( NpcEvent.SeekTarget, ent );
 			}
 		}
+		/*
 		else if ( CurrentState == NpcState.Idle )
 		{
 			if ( HasTarget() )
@@ -443,6 +340,137 @@ class NpcGunner : NpcPawn
 			}
 		}
 		DebugOverlay.ScreenText( ToString() + " " + CurrentState.ToString() + " " + Target.ToString() );
+		*/
+	}
+
+	// --------------------------------------------------
+	// Pathfinding
+	// --------------------------------------------------
+
+	protected bool UsePatrolPath = false;
+	protected Sandbox.Nav.Patrol PatrolPath;
+
+	public virtual void AddPatrolPath(Sandbox.Nav.Patrol patrolPath)
+    {
+		PatrolPath = patrolPath;
+		UsePatrolPath = true;
+	}
+
+	protected virtual void SteerUpdate()
+	{
+		TimeSincePathThink = 0;
+		if (HasTarget())
+		{
+			var ent = Target.Target;
+			// If we've seen our target recently, we know where they are;
+			// otherwise we can only proceed with last known pos
+			var tgtpos = TimeSinceTargetVisible < 2f ? ent.Position : LastTargetPosition;
+			var dist = (tgtpos - Position).Length;
+			var closer = Position + (tgtpos - Position) * 0.5f;
+			if (CurrentState == NpcState.Engage)
+			{
+				// We are in engage mode. Speed up and wander nearby (like strafing)
+				Speed = CombatSpeed;
+
+				if (dist > MaxCombatDistance)
+				{
+					// If we are not close, try to find a position in between the target and ourselves
+					var distmult = Math.Clamp(dist / 400, 1, 3);
+					var pos = NavMesh.GetPointWithinRadius(closer, 100f * distmult, 200f * distmult);
+					Steer = new NavSteer();
+					if (!pos.HasValue)
+						Steer.Target = tgtpos;
+					else
+						Steer.Target = (Vector3)pos;
+				}
+				else
+				{
+					Sandbox.Nav.Wander wander = new Sandbox.Nav.Wander();
+					wander.MinRadius = 40f;
+					wander.MaxRadius = 100f;
+					Steer = wander;
+				}
+			}
+			else if (CurrentState == NpcState.Push)
+			{
+				// We are pushing. Let's get in some trouble and die for the player's amusement!
+				Speed = CombatSpeed;
+
+				Vector3? pos;
+				if (dist > PushCombatDistance)
+				{
+					// If we are not close, try to find a position in between the target and ourselves
+					var distmult = Math.Clamp(dist / 300, 1, 3);
+					pos = NavMesh.GetPointWithinRadius(closer, 100f * distmult, 200f * distmult);
+				}
+				else
+				{
+					// We are close enough. Let's do some shadow dancing
+					pos = NavMesh.GetPointWithinRadius(tgtpos, MinCombatDistance, Math.Max(MinCombatDistance * 1.5f, PushCombatDistance * 0.75f));
+				}
+
+				Steer = new NavSteer();
+				if (!pos.HasValue)
+					Steer.Target = tgtpos;
+				else
+					Steer.Target = (Vector3)pos;
+
+			}
+			else if (CurrentState == NpcState.Search)
+			{
+				// We lost track of the target.
+				Speed = (CombatSpeed + PatrolSpeed) / 2;
+				if (LastTargetPosition != Vector3.Zero)
+				{
+					var tr = Trace.Ray(EyePos, tgtpos)
+						.Ignore(Owner)
+						.Ignore(this)
+						.Run();
+					if (tr.Fraction >= 0.9)
+						LastTargetPosition = Vector3.Zero;
+				}
+
+				Vector3? pos;
+
+				if (LastTargetPosition == Vector3.Zero)
+				{
+					// We can see the last known position. Let's look around instead
+					pos = NavMesh.GetPointWithinRadius(Position, 200f, 400f);
+				}
+				else if (TimeSinceTargetVisible < 0)
+				{
+					// We need to investigate the last known position directly and now
+					pos = LastTargetPosition;
+				}
+				else
+				{
+					// Approach last known position
+					pos = NavMesh.GetPointWithinRadius(tgtpos, 100f, 200f);
+				}
+
+				Steer = new NavSteer();
+				if (!pos.HasValue)
+					Steer.Target = tgtpos;
+				else
+					Steer.Target = (Vector3)pos;
+
+			}
+		}
+		else
+		{
+			Speed = PatrolSpeed;
+			Steer = null; // this will also stop the NPC when in idle or disabled state
+			if (CurrentState == NpcState.Patrol)
+            {
+				if (UsePatrolPath)
+                {
+					Steer = PatrolPath;
+                } else
+                {
+					Steer = new Sandbox.Nav.Wander(); // patrol normally
+				}
+            }
+		}
 	}
 
 	// --------------------------------------------------
@@ -537,8 +565,7 @@ class NpcGunner : NpcPawn
 	}
 	protected virtual bool CheckTargetVisiblity()
 	{
-		// TODO: maybe this can trigger less often for performance?
-		if ( TimeSinceVisCheck == 0 ) return LastVisCheck;
+		if ( TimeSinceVisCheck < npc_gunner_vision_frequency ) return LastVisCheck;
 		LastVisCheck = false;
 		var lastTarget = Target;
 		var bestVisible = Target;
@@ -616,27 +643,6 @@ class NpcGunner : NpcPawn
 	// AI Logic
 	// --------------------------------------------------
 
-	public override void Spawn()
-	{
-		base.Spawn();
-
-		InitializeStates();
-
-		TimeSinceVisCheck = 0;
-		TimeSincePathThink = 0;
-
-		Target = default;
-		TargetList = new Dictionary<Entity, NpcTargetInfo> { };
-		CurrentState = NpcState.Idle;
-
-		// TODO: better way to set NPC weapons
-		Weapon = new Pistol();
-		Weapon.OnCarryStart( this );
-		Weapon.ActiveStart( this );
-
-		Speed = PatrolSpeed;
-	}
-
 	protected override void NpcThink()
 	{
 		var visible = CheckTargetVisiblity();
@@ -652,15 +658,14 @@ class NpcGunner : NpcPawn
 		}
 
 		// Shoot the target!
-		if ( HasTarget() && visible )
+		if ( HasTarget() )
 		{
 			SetAnimInt( "holdtype", Weapon.HoldType );
 
 			if ( Weapon != null ) // we can fire right as they disappear for a second
 			{
-				Log.Info( TimeSinceTargetReappear + " " + TimeSinceTargetVisible );
 				var angdiff = Rotation.Distance( Rotation.LookAt( ent.Position - Position, Vector3.Up ) );
-				if (angdiff <= 15f && TimeSinceTargetReappear >= 0f && TimeSinceTargetVisible <= 1f &&
+				if (angdiff <= 15f && TimeSinceTargetReappear >= 0f && TimeSinceTargetVisible <= 2f &&
 						Weapon.CanPrimaryAttack() && ( Weapon.Automatic || Weapon.TimeSincePrimaryAttack > ( 1 / WeaponSemiRate ) ) )
 				{
 					Weapon.AttackPrimary();
@@ -681,7 +686,6 @@ class NpcGunner : NpcPawn
 			SetAnimInt( "holdtype", Weapon.IsReloading ? Weapon.HoldType : 0 );
 		}
 	}
-
 	protected override void NpcTurn()
 	{
 		if ( LastTargetPosition != Vector3.Zero )
@@ -742,12 +746,12 @@ class NpcGunner : NpcPawn
 			EyeRot = Rotation.Lerp( EyeRot, tgt, Time.Delta * 10f );
 		}
 	}
-
 	protected override void NpcAnim()
 	{
-		SetAnimLookAt( "aim_eyes", EyePos + LookDir * 200 );
-		SetAnimLookAt( "aim_head", EyePos + EyeRot.Forward * 200 );
-		SetAnimLookAt( "aim_body", Position + Rotation.Forward * 200 );
+		var dir = EyePos + EyeRot.Forward * 200;
+		SetAnimLookAt( "aim_eyes", LookDir);
+		SetAnimLookAt( "aim_head", dir);
+		SetAnimLookAt( "aim_body", dir);
 		SetAnimFloat( "aim_body_weight", 1f );
 
 		SetAnimBool( "b_grounded", true );
@@ -765,6 +769,30 @@ class NpcGunner : NpcPawn
 		SetAnimFloat( "duckspeed_scale", 1.0f / 80.0f );
 	}
 
+	// --------------------------------------------------
+	// Entity Logic
+	// --------------------------------------------------
+
+	public override void Spawn()
+	{
+		base.Spawn();
+
+		InitializeStates();
+
+		TimeSinceVisCheck = 0;
+		TimeSincePathThink = 0;
+
+		Target = default;
+		TargetList = new Dictionary<Entity, NpcTargetInfo> { };
+		CurrentState = NpcState.Idle;
+
+		// TODO: better way to set NPC weapons
+		Weapon = new Pistol();
+		Weapon.OnCarryStart(this);
+		Weapon.ActiveStart(this);
+
+		Speed = PatrolSpeed;
+	}
 	public override void TakeDamage( DamageInfo info )
 	{
 
@@ -795,4 +823,5 @@ class NpcGunner : NpcPawn
 			FireEvent( NpcEvent.SeekTarget, attacker );
 		}
 	}
+
 }
