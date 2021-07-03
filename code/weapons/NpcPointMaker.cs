@@ -1,7 +1,7 @@
 using Sandbox;
 
-[Library( "heist_npcspawner", Title = "NPC Spawner" )]
-partial class NpcSpawner : BaseHeistWeapon
+[Library( "heist_npcpointmaker", Title = "NPC Point Maker" )]
+partial class NpcPointMaker : BaseHeistWeapon
 {
 	public override string ViewModelPath => "weapons/rust_pistol/v_rust_pistol.vmdl";
 
@@ -30,21 +30,38 @@ partial class NpcSpawner : BaseHeistWeapon
 		if ( IsServer )
 			using ( Prediction.Off() )
 			{
-
 				var startPos = Owner.EyePos;
 				var dir = Owner.EyeRot.Forward;
 				var tr = Trace.Ray( startPos, startPos + dir * 10000 )
-					.Ignore( Owner )
+					.WorldOnly()
 					.Run();
-				if (tr.Hit)
+				if ( tr.Hit )
 				{
-					var pawn = new NpcGunner
-					{
-						Position = tr.EndPos,
-						Rotation = Owner.Rotation,
-					};
+					var point = NpcPoint.CreatePoint( tr.EndPos );
 				}
 			}
+	}
+
+	public override void Reload()
+	{
+		NpcPoint.All.Clear();
+	}
+
+	public override void Simulate( Client owner )
+	{
+		base.Simulate(owner);
+
+		if ( NpcPoint.nav_drawpoints )
+		{
+			using ( Sandbox.Debug.Profile.Scope( "Draw Points" ) )
+			{
+				var arr = NpcPoint.All;
+				foreach ( var p in arr )
+				{
+					p.DebugDraw( 0.1f, 0.5f );
+				}
+			}
+		}
 	}
 
 	[ClientRpc]

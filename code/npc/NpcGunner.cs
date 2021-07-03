@@ -82,6 +82,21 @@ public struct NpcTargetInfo
 		return "(" + (IsValid() ? Target.ToString() : "INVALID") + ", " + Enmity + "enm, " + Math.Round(TimeSinceVisible, 1) + "tsv)";
 	}
 }
+public struct NpcParams
+{
+	public float PatrolSpeed;
+	public float CombatSpeed;
+
+	// The rate at which we will fire semi-automatic weapons.
+	public float WeaponSemiRate;
+
+	// The distance within which we try to back off
+	public float MinCombatDistance;
+	// The distance beyond which we will close in if pushing
+	public float PushCombatDistance;
+	// The distance beyond which we don't try to shoot (not effective)
+	public float MaxCombatDistance;
+}
 
 class NpcGunner : NpcPawn
 {
