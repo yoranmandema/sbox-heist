@@ -79,34 +79,7 @@ public partial class NpcPawn : AnimEntity
 
 	protected virtual void NpcAnim()
 	{
-		using ( Sandbox.Debug.Profile.Scope( "Set Anim Vars" ) )
-		{
-			LookDir = Vector3.Lerp( LookDir, InputVelocity.WithZ( 0 ) * 1000, Time.Delta * 1.0f );
-			//SetAnimLookAt( "lookat_pos", Steer.Target );
-			//SetAnimLookAt( "aimat_pos", Steer.Target );
-			SetAnimLookAt( "aim_eyes", Steer.Target );
-			SetAnimLookAt( "aim_head", Steer.Target );
-			SetAnimLookAt( "aim_body", Rotation.Forward );
-			//SetAnimFloat( "aimat_weight", 0.5f );
-			SetAnimFloat( "aim_body_weight", 0.5f );
-		}
 
-		using ( Sandbox.Debug.Profile.Scope( "Set Anim Vars" ) )
-		{
-			SetAnimBool( "b_grounded", true );
-			SetAnimBool( "b_noclip", false );
-			SetAnimBool( "b_swim", false );
-
-			var forward = Vector3.Dot( Rotation.Forward, Velocity.Normal );
-			var sideward = Vector3.Dot( Rotation.Right, Velocity.Normal );
-			var angle = MathF.Atan2( sideward, forward ).RadianToDegree().NormalizeDegrees();
-			SetAnimFloat( "move_direction", angle );
-
-			SetAnimFloat( "wishspeed", Velocity.Length * 1.5f );
-			SetAnimFloat( "walkspeed_scale", 1.0f / 10.0f );
-			SetAnimFloat( "runspeed_scale", 1.0f / 320.0f );
-			SetAnimFloat( "duckspeed_scale", 1.0f / 80.0f );
-		}
 	}
 
 	[Event.Tick.Server]

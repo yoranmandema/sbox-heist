@@ -13,11 +13,12 @@ public class NpcPoint
 {
 
 	[ConVar.Replicated]
-	public static bool nav_drawpoints { get; set; } = false;
+	public static int nav_drawpoints { get; set; } = 0;
 
 	public static List<NpcPoint> All = new List<NpcPoint>();
 
-	public static float MaxVisDistance = 1000f;
+	public static float MaxVisDistance = 3000f;
+	public static int PolarDivs = 12;
 
 	Vector3 Position;
 	public List<float> PolarVisInfo { get; protected set; }
@@ -45,15 +46,25 @@ public class NpcPoint
 
 	public bool IsClaimed()
 	{
-		return Claimant.IsValid();
+		return Claimant != null && Claimant.IsValid();
 	}
-
+	public Entity GetClaimant()
+	{
+		return Claimant;
+	}
 	public bool Claim( Entity ent )
 	{
 		if ( IsClaimed() ) return false;
 		Claimant = ent;
 
 		return true;
+	}
+	public void Unclaim( Entity ent )
+	{
+		if (Claimant == ent)
+		{
+			Claimant = null;
+		}
 	}
 
 	public void GenerateVisInfo()
@@ -65,56 +76,78 @@ public class NpcPoint
 		{
 			var f = PolarHeight[j];
 			var vec = new Vector3( 0, 0, f );
-			for ( int i = 0; i < 8; i++ )
+			for ( int i = 0; i < PolarDivs; i++ )
 			{
-				// For each of the 8 directions...
-				var dir = Rotation.FromYaw( 360 / 8 * i ).Forward;
+				// For each of the directions...
+				var dir = Rotation.FromYaw( 360 / PolarDivs * i ).Forward;
 				// Run a trace against the world and save its distance
 				var tr = Trace.Ray( Position + vec, Position + vec + dir * MaxVisDistance )
 					.WorldOnly()
 					.Run();
-				Log.Info( (j * 8) + i + " " + tr.Distance );
 				PolarVisInfo.Add( tr.Distance );
-				//PolarVisInfo.Insert( (j + 1) * i, tr.Distance );
 			}
 		}
 	}
-
-	public virtual void Tick()
+	public List<bool> Visible(Vector3 pos)
 	{
-		if ( nav_drawpoints )
+		var vec = pos - Position;
+		// Use two angles, with a small bit of offset, if the actual angle is somewhere in the middle of two polar traces
+		var i = (int)(Math.Round( (vec.EulerAngles.yaw + 10f) / (360 / PolarDivs) ) % PolarDivs);
+		var i2 = (int)(Math.Round( (vec.EulerAngles.yaw - 10f) / (360 / PolarDivs) ) % PolarDivs);
+		var list = new List<bool>();
+		for (int j = 0; j < PolarHeight.Count; j++ )
 		{
-			using ( Sandbox.Debug.Profile.Scope( "Update Path" ) )
-			{
-				DebugDraw(0.1f, 0.5f);
-			}
+			list.Add( MathF.Min( PolarVisInfo[j * PolarDivs + i], PolarVisInfo[j * PolarDivs + i2] ) >= vec.Length );
 		}
-
+		return list;
 	}
+
+	public List<float> VisDistTo( Vector3 pos )
+	{
+		var vec = pos - Position;
+		// Use two angles, with a small bit of offset, if the actual angle is somewhere in the middle of two polar traces
+		var i = (int)(Math.Round( (vec.EulerAngles.yaw + 10f) / (360 / PolarDivs) ) % PolarDivs);
+		var i2 = (int)(Math.Round( (vec.EulerAngles.yaw - 10f) / (360 / PolarDivs) ) % PolarDivs);
+		var list = new List<float>();
+		for ( int j = 0; j < PolarHeight.Count; j++ )
+		{
+			list.Add( MathF.Min( PolarVisInfo[j * PolarDivs + i], PolarVisInfo[j * PolarDivs + i2] ) );
+		}
+		return list;
+	}
+
 	public void DebugDraw( float time, float opacity = 1.0f )
 	{
 		var draw = Sandbox.Debug.Draw.ForSeconds( time );
 		var lift = Vector3.Up * 2;
 
-		draw.WithColor( Color.White.WithAlpha( opacity ) ).Circle( lift + Position, Vector3.Up, 20.0f );
-
-		draw.WithColor( Color.White.WithAlpha( opacity ) ).Line( Position, Position + Vector3.Up * PolarHeight[PolarHeight.Count() - 1] );
-		for ( int j = 0; j < PolarHeight.Count; j++ )
+		if (IsClaimed())
 		{
-			var f = PolarHeight[j];
-			var vec = new Vector3( 0, 0, f );
-			for ( int i = 0; i < 8; i++ )
+			draw.WithColor( Color.Orange.WithAlpha( opacity ) ).Circle( lift + Position, Vector3.Up, 20.0f );
+			draw.WithColor( Color.Orange.WithAlpha( opacity ) ).Line( Position, Position + Vector3.Up * PolarHeight[PolarHeight.Count() - 1] );
+		} else
+		{
+			draw.WithColor( Color.White.WithAlpha( opacity ) ).Circle( lift + Position, Vector3.Up, 20.0f );
+			draw.WithColor( Color.White.WithAlpha( opacity ) ).Line( Position, Position + Vector3.Up * PolarHeight[PolarHeight.Count() - 1] );
+		}
+
+		if ( nav_drawpoints >= 2 )
+			for ( int j = 0; j < PolarHeight.Count; j++ )
 			{
-				var dir = Rotation.FromYaw( 360 / 8 * i ).Forward;
-				var dist = PolarVisInfo[(j * 8) + i];
-				if (MathF.Abs( MaxVisDistance - dist ) < 0.001f)
+				var f = PolarHeight[j];
+				var vec = new Vector3( 0, 0, f );
+				for ( int i = 0; i < PolarDivs; i++ )
 				{
-					draw.WithColor( Color.Green.WithAlpha( opacity ) ).Line( Position + vec, Position + vec + dir * dist );
-				} else
-				{
-					draw.WithColor( Color.Red.WithAlpha( opacity ) ).Line( Position + vec, Position + vec + dir * dist );
+					var dir = Rotation.FromYaw( 360 / PolarDivs * i ).Forward;
+					var dist = PolarVisInfo[(j * PolarDivs) + i];
+					if (MathF.Abs( MaxVisDistance - dist ) < 0.001f)
+					{
+						draw.WithColor( Color.Green.WithAlpha( opacity ) ).Line( Position + vec, Position + vec + dir * 150f );
+					} else
+					{
+						draw.WithColor( Color.Red.WithAlpha( opacity ) ).Line( Position + vec, Position + vec + dir * dist );
+					}
 				}
 			}
-		}
 	}
 }

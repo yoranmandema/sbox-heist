@@ -51,14 +51,14 @@ partial class NpcPointMaker : BaseHeistWeapon
 	{
 		base.Simulate(owner);
 
-		if ( NpcPoint.nav_drawpoints )
+		if ( NpcPoint.nav_drawpoints > 0 )
 		{
 			using ( Sandbox.Debug.Profile.Scope( "Draw Points" ) )
 			{
 				var arr = NpcPoint.All;
 				foreach ( var p in arr )
 				{
-					p.DebugDraw( 0.1f, 0.5f );
+					p.DebugDraw( 0.1f, 0.2f );
 				}
 			}
 		}

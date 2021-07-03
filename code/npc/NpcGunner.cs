@@ -137,17 +137,17 @@ class NpcGunner : NpcPawn
 	// The rate at which we will fire semi-automatic weapons.
 	protected float WeaponSemiRate = 4f;
 
-	protected float PatrolSpeed = 80f;
-	protected float CombatSpeed = 150f;
+	protected float PatrolSpeed = 40f;
+	protected float CombatSpeed = 120f;
 
 	// The distance within which we try to back off
-	protected float MinCombatDistance = 100f;
+	protected float MinCombatDistance = 80f;
 
 	// The distance beyond which we will close in if pushing
-	protected float PushCombatDistance = 500f;
+	protected float PushCombatDistance = 300f;
 
 	// The distance beyond which we don't try to shoot (not effective)
-	protected float MaxCombatDistance = 1000f;
+	protected float MaxCombatDistance = 750f;
 
 	TimeSince TimeSincePathThink;
 	TimeSince TimeSinceVisCheck;
@@ -160,6 +160,7 @@ class NpcGunner : NpcPawn
 	{
 		return Target.IsValid();
 	}
+	NpcPoint ClaimedPoint;
 
 	// Alias for setting info values of the current target.
 	public Vector3 LastTargetPosition { 
@@ -287,6 +288,7 @@ class NpcGunner : NpcPawn
 	protected virtual void SteerUpdate()
 	{
 		TimeSincePathThink = 0;
+
 		if ( HasTarget() )
 		{
 			var ent = Target.Target;
@@ -297,12 +299,64 @@ class NpcGunner : NpcPawn
 			var closer = Position + (tgtpos - Position) * 0.5f;
 			if ( CurrentState == NpcState.Engage )
 			{
-				// We are in engage mode. Speed up and wander nearby (like strafing)
-				Speed = CombatSpeed;
-
-				if ( dist > MaxCombatDistance )
+				// Attempt to find the best cover point to use
+				NpcPoint best_point = null;
+				var best_idealness = 0;
+				foreach (var p in NpcPoint.All)
 				{
-					// If we are not close, try to find a position in between the target and ourselves
+					var pdist = p.GetPosition().Distance( Position );
+					if ((!p.IsClaimed() || p.GetClaimant() == this) && pdist <= 1000f)
+					{
+						var idealness = 0;
+						var dist2 = (tgtpos - p.GetPosition()).Length;
+
+						// LoS to target (up to 25 if chest-high cover)
+						var vis = p.VisDistTo( tgtpos );
+						if ( vis[1] > dist2 && vis[0] > dist2 ) continue;
+						if ( vis[0] < dist2 ) idealness += (int)Math.Round( Math.Clamp( 25 - vis[0] / dist2 * 25, 0, 25 ) );
+
+						// Proximity to our location (up to +10)
+						idealness += (int)Math.Round( Math.Clamp( 10 - pdist / 50, 0, 10 ) );
+
+						// TODO: Cover from secondary threat (?)
+
+						// Inside ideal range
+						if ( dist2 < PushCombatDistance && dist2 > MinCombatDistance )
+						{
+							idealness += 10;
+						}
+
+
+						if ( best_idealness < idealness )
+						{
+							best_idealness = idealness;
+							best_point = p;
+						}
+					}
+				}
+
+				if ( best_idealness > 0 && best_point != null )
+				{
+					bool ok = best_point.Claim( this );
+					if (ok)
+					{
+						Speed = CombatSpeed;
+						if ( ClaimedPoint != null && ClaimedPoint.IsClaimed() )
+							ClaimedPoint.Unclaim( this );
+						ClaimedPoint = best_point;
+						Sandbox.Nav.WanderPoint wander = new Sandbox.Nav.WanderPoint();
+						wander.MinRadius = 10f;
+						wander.MaxRadius = 50f;
+						wander.Position = best_point.GetPosition();
+						Steer = wander;
+						//Steer = new NavSteer();
+						//Steer.Target = best_point.GetPosition();
+					}
+				}
+				else if ( dist > MaxCombatDistance )
+				{
+					Speed = CombatSpeed;
+					// Try to find a position in between the target and ourselves
 					var distmult = Math.Clamp( dist / 400, 1, 3 );
 					var pos = NavMesh.GetPointWithinRadius( closer, 100f * distmult, 200f * distmult );
 					Steer = new NavSteer();
@@ -310,8 +364,11 @@ class NpcGunner : NpcPawn
 						Steer.Target = tgtpos;
 					else
 						Steer.Target = (Vector3)pos;
-				} else
+				}
+				else
 				{
+					Speed = CombatSpeed;
+					// Wander around
 					Sandbox.Nav.Wander wander = new Sandbox.Nav.Wander();
 					wander.MinRadius = 40f;
 					wander.MaxRadius = 100f;
@@ -327,8 +384,8 @@ class NpcGunner : NpcPawn
 				if ( dist > PushCombatDistance )
 				{
 					// If we are not close, try to find a position in between the target and ourselves
-					var distmult = Math.Clamp( dist / 300, 1, 3 );
-					pos = NavMesh.GetPointWithinRadius( closer, 100f * distmult, 200f * distmult );
+					var distmult = Math.Clamp( dist / 250, 1, 3 );
+					pos = NavMesh.GetPointWithinRadius( closer, 50f * distmult, 80f * distmult );
 				}
 				else
 				{
@@ -395,7 +452,7 @@ class NpcGunner : NpcPawn
 		var ent = HasTarget() ? Target.Target : default;
 		if ( CurrentState == NpcState.Push )
 		{
-			if ( !HasTarget() || TimeSinceTargetVisible >= 5f )
+			if ( !HasTarget() || TimeSinceTargetVisible >= 15f )
 			{
 				// Lost target, hunt them down
 				FireEvent( NpcEvent.SeekTarget, ent );
@@ -403,12 +460,12 @@ class NpcGunner : NpcPawn
 			}
 		} else if ( CurrentState == NpcState.Engage )
 		{
-			if ( !HasTarget() || TimeSinceTargetVisible >= 8f )
+			if ( !HasTarget() || TimeSinceTargetVisible >= 30f )
 			{
 				// Enter patrol state (we don't want to actively look for them) 
 				FireEvent( NpcEvent.Disengage, ent );
 				return;
-			} else if ( TimeSinceTargetVisible <= 2f && ent.Health <= Health * 0.75 )
+			} else if ( TimeSinceTargetVisible <= 2f && ent.Health <= Health * 0.4 )
 			{
 				// They're weak, let's push them!
 				FireEvent( NpcEvent.PushTarget, ent );
@@ -416,7 +473,7 @@ class NpcGunner : NpcPawn
 		}
 		else if ( CurrentState == NpcState.Search )
 		{
-			if ( TimeSinceTargetVisible >= 20f )
+			if ( TimeSinceTargetVisible >= 90f )
 			{
 				// Give up hunting
 				FireEvent( NpcEvent.Disengage, ent );
@@ -673,13 +730,12 @@ class NpcGunner : NpcPawn
 
 			if ( Weapon != null ) // we can fire right as they disappear for a second
 			{
-				Log.Info( TimeSinceTargetReappear + " " + TimeSinceTargetVisible );
 				var angdiff = Rotation.Distance( Rotation.LookAt( ent.Position - Position, Vector3.Up ) );
 				if (angdiff <= 15f && TimeSinceTargetReappear >= 0f && TimeSinceTargetVisible <= 1f &&
 						Weapon.CanPrimaryAttack() && ( Weapon.Automatic || Weapon.TimeSincePrimaryAttack > ( 1 / WeaponSemiRate ) ) )
 				{
 					Weapon.AttackPrimary();
-					// DebugOverlay.Line( EyePos, EyePos + EyeRot.Forward * 1000, 3 );
+					// DebugOverlay.Line( EyePos, EyePos + EyeRot.Forward * 1000, 1 );
 				}
 				else if ( Weapon.CanReload() && Weapon.AmmoClip == 0 )
 				{
@@ -765,19 +821,44 @@ class NpcGunner : NpcPawn
 		SetAnimLookAt( "aim_body", Position + Rotation.Forward * 200 );
 		SetAnimFloat( "aim_body_weight", 1f );
 
-		SetAnimBool( "b_grounded", true );
+		SetAnimBool( "b_grounded", GroundEntity != null );
 		SetAnimBool( "b_noclip", false );
-		SetAnimBool( "b_swim", false );
-
-		var forward = Vector3.Dot( Rotation.Forward, Velocity.Normal );
-		var sideward = Vector3.Dot( Rotation.Right, Velocity.Normal );
-		var angle = MathF.Atan2( sideward, forward ).RadianToDegree().NormalizeDegrees();
-		SetAnimFloat( "move_direction", angle );
+		SetAnimBool( "b_swim", WaterLevel.Fraction > 0.5f );
 
 		SetAnimFloat( "wishspeed", Velocity.Length * 1.5f );
 		SetAnimFloat( "walkspeed_scale", 1.0f / 10.0f * (Speed / 100) );
 		SetAnimFloat( "runspeed_scale", 1.0f / 320.0f );
 		SetAnimFloat( "duckspeed_scale", 1.0f / 80.0f );
+
+		// Move Speed
+		{
+			var dir = Velocity;
+			var forward = Rotation.Forward.Dot( dir );
+			var sideward = Rotation.Right.Dot( dir );
+
+			var angle = MathF.Atan2( sideward, forward ).RadianToDegree().NormalizeDegrees();
+
+			SetAnimFloat( "move_direction", angle );
+			SetAnimFloat( "move_speed", Velocity.Length );
+			SetAnimFloat( "move_groundspeed", Velocity.WithZ( 0 ).Length );
+			SetAnimFloat( "move_y", sideward );
+			SetAnimFloat( "move_x", forward );
+		}
+
+		// Wish Speed
+		{
+			var dir = Velocity;
+			var forward = Rotation.Forward.Dot( dir );
+			var sideward = Rotation.Right.Dot( dir );
+
+			var angle = MathF.Atan2( sideward, forward ).RadianToDegree().NormalizeDegrees();
+
+			SetAnimFloat( "wish_direction", angle );
+			SetAnimFloat( "wish_speed", Velocity.Length );
+			SetAnimFloat( "wish_groundspeed", Velocity.WithZ( 0 ).Length );
+			SetAnimFloat( "wish_y", sideward );
+			SetAnimFloat( "wish_x", forward );
+		}
 	}
 
 	public override void TakeDamage( DamageInfo info )
