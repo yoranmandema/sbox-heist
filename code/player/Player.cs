@@ -36,13 +36,14 @@ partial class HeistPlayer : Player
 		SupressPickupNotices = true;
 
 		Inventory.Add( new Pistol(), true );
-		Inventory.Add( new WeaponM4A1(), true );
+		Inventory.Add( new WeaponM4A1() );
 		Inventory.Add( new Grenade());
 		Inventory.Add( new Shotgun() );
 		Inventory.Add( new SMG() );
 		Inventory.Add( new Crossbow() );
 
-		Inventory.Add( new NPCSpawner(), true );
+		Inventory.Add( new NpcSpawner() );
+		Inventory.Add( new NpcPointMaker() );
 
 		GiveAmmo( AmmoType.Pistol, 1000 );
 		GiveAmmo( AmmoType.Grenade, 1000 );

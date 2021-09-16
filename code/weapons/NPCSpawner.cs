@@ -1,12 +1,12 @@
 using Sandbox;
 
 [Library( "heist_npcspawner", Title = "NPC Spawner" )]
-partial class NPCSpawner : BaseHeistWeapon
+partial class NpcSpawner : BaseHeistWeapon
 {
 	public override string ViewModelPath => "weapons/rust_pistol/v_rust_pistol.vmdl";
 
 	public override float PrimaryRate => 5;
-	public override int Bucket => 1;
+	public override int Bucket => 3;
 	public override AmmoType AmmoType => AmmoType.Grenade;
 
 	public override void Spawn()
