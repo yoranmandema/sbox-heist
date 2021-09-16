@@ -50,6 +50,6 @@ partial class Grenade : BaseHeistWeapon
 
 		(ViewModelEntity as HeistViewModel)?.ApplyImpulse( Vector3.Forward * -50.5f );
 
-		CrosshairPanel?.OnEvent( "fire" );
+		CrosshairPanel?.CreateEvent( "Attack" );
 	}
 }

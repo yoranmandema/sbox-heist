@@ -58,7 +58,7 @@ partial class Shotgun : BaseHeistWeapon
 	public override void AttackSecondary()
 	{
 		return;
-
+		/*
 		TimeSincePrimaryAttack = -0.5f;
 		TimeSinceSecondaryAttack = -0.5f;
 
@@ -83,6 +83,7 @@ partial class Shotgun : BaseHeistWeapon
 		{
 			ShootBullet( 0.4f, 0.3f, 8.0f, 3.0f );
 		}
+		*/
 	}
 
 	[ClientRpc]
@@ -102,7 +103,7 @@ partial class Shotgun : BaseHeistWeapon
 
 		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -50.5f + Vector3.Left * -1.5f + Vector3.Up * 2f);
 
-		CrosshairPanel?.OnEvent( "fire" );
+		CrosshairPanel?.CreateEvent( "Attack" );
 	}
 
 	[ClientRpc]
@@ -116,7 +117,7 @@ partial class Shotgun : BaseHeistWeapon
 			
 		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -50.5f + Vector3.Left * -1.5f + Vector3.Up * -10f);
 
-		CrosshairPanel?.OnEvent( "fire" );
+		CrosshairPanel?.CreateEvent( "Attack" );
 
 		if ( IsLocalPawn )
 		{

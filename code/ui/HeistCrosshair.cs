@@ -4,8 +4,10 @@ using Sandbox.UI;
 using Sandbox.UI.Construct;
 using System;
 
-public class HeistCrosshair : Panel
+public class HeistCrosshair : StandardCrosshair
 {
+	// Following code is based on old crosshair behavior. TODO: write new crosshairs
+	/*
 	int fireCounter;
 
 	public HeistCrosshair()
@@ -40,4 +42,5 @@ public class HeistCrosshair : Panel
 
 		base.OnEvent( eventName );
 	}
+	*/
 }

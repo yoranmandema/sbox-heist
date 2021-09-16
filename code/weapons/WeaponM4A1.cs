@@ -86,7 +86,8 @@ partial class WeaponM4A1 : BaseHeistWeapon
 				
 		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -0.5f + Vector3.Left * -0.5f + Vector3.Up * 0.5f);
 
-		CrosshairPanel?.OnEvent( "fire" );
+		CrosshairPanel?.CreateEvent( "Attack" );
+		
 	}
 
 	public override void SimulateAnimator( PawnAnimator anim )

@@ -75,6 +75,6 @@ partial class SMG : BaseHeistWeapon
 				
 		(ViewModelEntity as HeistViewModel)?.ApplyImpulse(Vector3.Forward * -30.5f + Vector3.Left * -1.5f + Vector3.Up * 1f);
 
-		CrosshairPanel?.OnEvent( "fire" );
+		CrosshairPanel?.CreateEvent( "Attack" );
 	}
 }
