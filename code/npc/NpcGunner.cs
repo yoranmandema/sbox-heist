@@ -134,8 +134,9 @@ class NpcGunner : NpcPawn
 
 	public BaseHeistWeapon Weapon { get; protected set; }
 
-	// The rate at which we will fire semi-automatic weapons.
-	protected float WeaponSemiRate = 4f;
+	// The rate at which we will fire semi-automatic weapons. There is a random additional delay to make it seem realistic.
+	protected float WeaponSemiRate = 3f;
+	protected float WeaponSemiVariance = 0.5f;
 
 	protected float PatrolSpeed = 40f;
 	protected float CombatSpeed = 120f;
@@ -152,6 +153,7 @@ class NpcGunner : NpcPawn
 	TimeSince TimeSincePathThink;
 	TimeSince TimeSinceVisCheck;
 	TimeSince TimeSinceScan;
+	TimeSince TimeSinceAttack;
 	bool LastVisCheck;
 
 	public NpcTargetInfo Target;
@@ -732,10 +734,11 @@ class NpcGunner : NpcPawn
 			{
 				var angdiff = Rotation.Distance( Rotation.LookAt( ent.Position - Position, Vector3.Up ) );
 				if (angdiff <= 15f && TimeSinceTargetReappear >= 0f && TimeSinceTargetVisible <= 1f &&
-						Weapon.CanPrimaryAttack() && ( Weapon.Automatic || Weapon.TimeSincePrimaryAttack > ( 1 / WeaponSemiRate ) ) )
+						Weapon.CanPrimaryAttack() && ( Weapon.Automatic || TimeSinceAttack > ( 1 / WeaponSemiRate ) ) )
 				{
 					Weapon.AttackPrimary();
 					// DebugOverlay.Line( EyePos, EyePos + EyeRot.Forward * 1000, 1 );
+					TimeSinceAttack = (Rand.Float() - 0.5f) * (WeaponSemiVariance / WeaponSemiRate);
 				}
 				else if ( Weapon.CanReload() && Weapon.AmmoClip == 0 )
 				{

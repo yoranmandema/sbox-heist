@@ -6,7 +6,7 @@ partial class WeaponM4A1 : BaseHeistWeapon
 { 
 	public override string ViewModelPath => "weapons/css_m4a1/css_v_m4a1.vmdl_c";
 
-	public override AmmoType AmmoType => AmmoType.Pistol;
+	public override AmmoType AmmoType => AmmoType.Crossbow;
 
 	public override float BobScale => 0.5f;
 	public override float SwayScale => 0.25f;

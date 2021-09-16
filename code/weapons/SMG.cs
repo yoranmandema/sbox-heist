@@ -49,7 +49,7 @@ partial class SMG : BaseHeistWeapon
 		//
 		// Shoot the bullets
 		//
-		ShootBullet( 0.1f, 1.5f, 5.0f, 3.0f );
+		ShootBullet( 0.1f, 1.5f, 10.0f, 3.0f );
 
 	}
 

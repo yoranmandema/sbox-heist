@@ -12,6 +12,10 @@ partial class Pistol : BaseHeistWeapon
 
 	public override bool Automatic => false;
 
+	public override FiringParams FiringParams => new FiringParams(20f, 0.01f, 0.04f, 0.02f);
+
+	public override string FiringSound => "rust_pistol.shoot";
+
 	public override int Bucket => 1;
 
 	public override void Spawn()
@@ -20,6 +24,7 @@ partial class Pistol : BaseHeistWeapon
 		SetModel( "weapons/rust_pistol/rust_pistol.vmdl" );
 	}
 
+	/*
 	public override void AttackPrimary()
 	{
 		TimeSincePrimaryAttack = 0;
@@ -46,7 +51,8 @@ partial class Pistol : BaseHeistWeapon
 		//
 		// Shoot the bullets
 		//
-		ShootBullet( 0.05f, 1.5f, 9.0f, 3.0f );
+		ShootBullet( 0.05f, 1.5f, 25.0f, 3.0f );
 
 	}
+	*/
 }

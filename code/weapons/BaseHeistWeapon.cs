@@ -7,6 +7,42 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 
+public struct FiringParams
+{
+	public float Damage;
+	public float Force;
+	public float HullSize;
+
+	// Amount of shots made
+	public int TraceCount;
+
+	// Natural spread of weapon at all times
+	public float Imprecision;
+
+	// Spread added when not aiming
+	public float SpreadHip;
+
+	// Spread added when moving
+	public float SpreadMove;
+
+	public float SpreadMultCrouch;
+	public float SpreadMultJump;
+
+	public FiringParams(float damage, float imprecision = 0.015f, float spreadhip = 0.05f, float spreadmove = 0.035f, int tracecount = 1, float hullsize = 0)
+	{
+		Damage = damage;
+		Force = (damage / 8).Clamp( 0, 2 );
+		TraceCount = tracecount;
+		Imprecision = imprecision;
+		SpreadHip = spreadhip;
+		SpreadMove = spreadmove;
+		HullSize = hullsize;
+
+		SpreadMultCrouch = 0.5f;
+		SpreadMultJump = 3f;
+	}
+}
+
 partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 {
 	public virtual AmmoType AmmoType => AmmoType.Pistol;
@@ -20,6 +56,10 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public virtual int HoldType => 1; // this is shit indeed
 
 	public virtual bool AllowAim => true;
+
+	public virtual FiringParams FiringParams => new FiringParams(10);
+
+	public virtual string FiringSound => "";
 
 	[Net, Predicted] public int AmmoClip { get; set; }
 	[Net, Predicted] public TimeSince TimeSinceReload { get; set; }
@@ -176,34 +216,34 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 		TimeSincePrimaryAttack = 0;
 		TimeSinceSecondaryAttack = 0;
 
+		if ( !TakeAmmo( 1 ) )
+		{
+			DryFire();
+			return;
+		}
+
 		//
 		// Tell the clients to play the shoot effects
 		//
 		ShootEffects();
 
-		//
-		// ShootBullet is coded in a way where we can have bullets pass through shit
-		// or bounce off shit, in which case it'll return multiple results
-		//
-		foreach ( var tr in TraceBullet( Owner.EyePos, Owner.EyePos + Owner.EyeRot.Forward * 5000 ) )
-		{
-			tr.Surface.DoBulletImpact( tr );
+		if (FiringSound != "") PlaySound( FiringSound );
 
-			if ( !IsServer ) continue;
-			if ( !tr.Entity.IsValid() ) continue;
-
-			// We turn predictiuon off for this, so aany exploding effects don't get culled etc
-			//
-			using ( Prediction.Off() )
-			{
-				var damage = DamageInfo.FromBullet( tr.EndPos, Owner.EyeRot.Forward * 100, 15 )
-					.UsingTraceResult( tr )
-					.WithAttacker( Owner )
-					.WithWeapon( this );
-
-				tr.Entity.TakeDamage( damage );
-			}
+		var spread = 0f;
+		spread += IsAiming ? 0 : FiringParams.SpreadHip;
+		spread += (Owner.Velocity.Length / 100f).Clamp( 0, 2f ) * FiringParams.SpreadMove;
+		
+		if (Owner is Player) {
+			var ply = (Player)Owner;
+			// TODO: implement jump multiplier (no way to detect?);
+			spread *= Controller.IsCrouching ? FiringParams.SpreadMultCrouch : 1;
 		}
+
+		var forward = Owner.EyeRot.Forward;
+		forward += (Vector3.Random + Vector3.Random + Vector3.Random + Vector3.Random) * spread * 0.25f;
+		forward = forward.Normal;
+
+		ShootBullet( FiringParams, forward );
 	}
 
 	public override bool CanSecondaryAttack()
@@ -270,6 +310,34 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 					.WithWeapon( this );
 
 				tr.Entity.TakeDamage( damageInfo );
+			}
+		}
+	}
+
+	public virtual void ShootBullet( FiringParams fparam, Vector3 forward)
+	{
+		for (int i = 0; i < fparam.TraceCount; i++ )
+		{
+			var dir = forward;
+			dir += (Vector3.Random + Vector3.Random + Vector3.Random + Vector3.Random) * fparam.Imprecision * 0.25f;
+			dir = dir.Normal;
+
+			foreach ( var tr in TraceBullet( Owner.EyePos, Owner.EyePos + dir * 5000, fparam.HullSize ) )
+			{
+				tr.Surface.DoBulletImpact( tr );
+
+				if ( !IsServer ) continue;
+				if ( !tr.Entity.IsValid() ) continue;
+
+				using ( Prediction.Off() )
+				{
+					var damageInfo = DamageInfo.FromBullet( tr.EndPos, dir * 100 * fparam.Force, fparam.Damage)
+						.UsingTraceResult( tr )
+						.WithAttacker( Owner )
+						.WithWeapon( this );
+
+					tr.Entity.TakeDamage( damageInfo );
+				}
 			}
 		}
 	}
