@@ -37,11 +37,13 @@ partial class NpcSpawner : BaseHeistWeapon
 						Position = tr.EndPos,
 						Rotation = Owner.Rotation,
 					};
+					/*
 					var path = new Sandbox.Nav.Patrol();
 					path.PatrolStart = tr.EndPos;
 					path.PatrolEnd = Owner.Position;
 					path.PatrolDelay = 10f;
 					pawn.AddPatrolPath(path);
+					*/
 				}
 			}
 	}

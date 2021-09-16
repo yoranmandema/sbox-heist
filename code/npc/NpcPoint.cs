@@ -13,7 +13,7 @@ public class NpcPoint
 {
 
 	[ConVar.Replicated]
-	public static int nav_drawpoints { get; set; } = 0;
+	public static int heist_navpoints_draw { get; set; } = 0;
 
 	public static List<NpcPoint> All = new List<NpcPoint>();
 
@@ -131,7 +131,7 @@ public class NpcPoint
 			draw.WithColor( Color.White.WithAlpha( opacity ) ).Line( Position, Position + Vector3.Up * PolarHeight[PolarHeight.Count() - 1] );
 		}
 
-		if ( nav_drawpoints >= 2 )
+		if ( heist_navpoints_draw >= 2 )
 			for ( int j = 0; j < PolarHeight.Count; j++ )
 			{
 				var f = PolarHeight[j];
@@ -149,5 +149,38 @@ public class NpcPoint
 					}
 				}
 			}
+	}
+
+	[ServerCmd( "heist_navpoints_save" )]
+	public static void SaveToFile()
+	{
+		FileSystem.Data.CreateDirectory( "heist" );
+
+		List<Vector3> pointpos = new();
+		foreach (var p in All)
+		{
+			pointpos.Add( p.GetPosition() );
+		}
+
+		FileSystem.Data.WriteJson("heist/" + Global.MapName + "_navpoints.json", pointpos );
+		Log.Info( "Saved " + All.Count() + " nav points to file." );
+	}
+
+	[ServerCmd( "heist_navpoints_load" )]
+	public static void LoadFromFile()
+	{
+		if ( FileSystem.Data.FileExists( "heist/" + Global.MapName + "_navpoints.json" ) )
+		{
+			All.Clear();
+			var pointpos = FileSystem.Data.ReadJson<List<Vector3>>( "heist/" + Global.MapName + "_navpoints.json" );
+			foreach (var p in pointpos)
+			{
+				CreatePoint( p );
+			}
+			Log.Info( "Generated " + All.Count() + " nav points from file." );
+		} else
+		{
+			Log.Info( "No saved nav points exist." );
+		}
 	}
 }

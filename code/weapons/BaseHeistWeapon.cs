@@ -19,13 +19,15 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 	public virtual bool Automatic => true;
 	public virtual int HoldType => 1; // this is shit indeed
 
+	public virtual bool AllowAim => true;
+
 	[Net, Predicted] public int AmmoClip { get; set; }
 	[Net, Predicted] public TimeSince TimeSinceReload { get; set; }
 	[Net, Predicted] public bool IsReloading { get; set; }
 	
 	public PlayerController Controller => (Owner as HeistPlayer)?.Controller as PlayerController;
 
-	[Net] public bool IsAiming => Controller?.IsAiming == true;
+	[Net] public bool IsAiming => Controller?.IsAiming == true && AllowAim == true;
 	[Net] public bool IsInSprint => Controller?.IsInSprint == true;
 	[Net] public bool IsLeaning => Controller?.IsLeaning == true;
 	[Net, Predicted] public TimeSince TimeSinceDeployed { get; set; }
@@ -202,6 +204,16 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 				tr.Entity.TakeDamage( damage );
 			}
 		}
+	}
+
+	public override bool CanSecondaryAttack()
+	{
+		if ( !Owner.IsValid() || (Owner is Player && ((Automatic && !Input.Down( InputButton.Attack2 ) || (!Automatic && !Input.Pressed( InputButton.Attack2 ))))) || (Owner is NpcPawn && IsReloading) ) return false;
+
+		var rate = SecondaryRate;
+		if ( rate <= 0 ) return true;
+
+		return TimeSinceSecondaryAttack > (1 / rate);
 	}
 
 	[ClientRpc]
