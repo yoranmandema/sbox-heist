@@ -12,7 +12,7 @@ partial class Pistol : BaseHeistWeapon
 
 	public override bool Automatic => false;
 
-	public override FiringParams FiringParams => new FiringParams(20f, 0.01f, 0.04f, 0.02f);
+	public override FiringParams FiringParams => new FiringParams(20f, 8f, 200f, 1000f, 0.01f, 0.04f, 0.02f);
 
 	public override string FiringSound => "rust_pistol.shoot";
 

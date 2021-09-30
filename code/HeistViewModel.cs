@@ -108,7 +108,7 @@ partial class HeistViewModel : BaseViewModel
 
 		LerpTowards( ref avoidance, avoidanceTrace.Hit ? (1f - avoidanceTrace.Fraction) : 0, 4f );
 		LerpTowards( ref sprintLerp, Weapon.IsInSprint ? 1 : 0, 8f );
-		LerpTowards( ref aimLerp, Weapon.IsAiming ? 1 : 0, 12f );
+		LerpTowards( ref aimLerp, (Weapon.IsAiming && !Weapon.IsReloading) ? 1 : 0, 12f );
 		LerpTowards( ref upDownOffset, speed * -LookUpSpeedScale + camSetup.Rotation.Forward.z * -LookUpPitchScale * bobScale, LookUpPitchScale * bobScale );
 
 		FieldOfView = 80f * (1- aimLerp) + 40f * aimLerp;

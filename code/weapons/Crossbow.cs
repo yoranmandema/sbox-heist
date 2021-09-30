@@ -5,6 +5,7 @@ partial class Crossbow : BaseHeistWeapon
 { 
 	public override string ViewModelPath => "weapons/rust_crossbow/v_rust_crossbow.vmdl";
 
+	public override int ClipSize => 1;
 	public override float PrimaryRate => 1;
 	public override int Bucket => 3;
 	public override AmmoType AmmoType => AmmoType.Crossbow;
@@ -16,9 +17,18 @@ partial class Crossbow : BaseHeistWeapon
 	{
 		base.Spawn();
 
-		AmmoClip = 3;
 		SetModel( "weapons/rust_crossbow/rust_crossbow.vmdl" );
 	}
+
+	public override void CreateViewModel()
+	{
+		base.CreateViewModel();
+
+		var vm = (ViewModelEntity as HeistViewModel);
+
+		vm.AimOffset = new Vector3( -5f, 13f, 6f );
+	}
+
 
 	public override void AttackPrimary()
 	{
@@ -40,31 +50,32 @@ partial class Crossbow : BaseHeistWeapon
 			bolt.Velocity = Owner.EyeRot.Forward * 100;
 		}
 	}
+	/*
+public override void Simulate( Client cl )
+{
+	base.Simulate( cl );
 
-	public override void Simulate( Client cl )
+	Zoomed = Input.Down( InputButton.Attack2 );
+}
+
+public override void PostCameraSetup( ref CameraSetup camSetup )
+{
+	base.PostCameraSetup( ref camSetup );
+
+	if ( Zoomed )
 	{
-		base.Simulate( cl );
-
-		Zoomed = Input.Down( InputButton.Attack2 );
+		camSetup.FieldOfView = 20;
 	}
+}
 
-	public override void PostCameraSetup( ref CameraSetup camSetup )
+public override void BuildInput( InputBuilder owner ) 
+{
+	if ( Zoomed )
 	{
-		base.PostCameraSetup( ref camSetup );
-
-		if ( Zoomed )
-		{
-			camSetup.FieldOfView = 20;
-		}
+		owner.ViewAngles = Angles.Lerp( owner.OriginalViewAngles, owner.ViewAngles, 0.2f );
 	}
-
-	public override void BuildInput( InputBuilder owner ) 
-	{
-		if ( Zoomed )
-		{
-			owner.ViewAngles = Angles.Lerp( owner.OriginalViewAngles, owner.ViewAngles, 0.2f );
-		}
-	}
+}
+*/
 
 	[ClientRpc]
 	protected override void ShootEffects()

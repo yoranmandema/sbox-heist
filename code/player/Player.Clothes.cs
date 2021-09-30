@@ -24,15 +24,13 @@ partial class HeistPlayer
 		if ( dressed ) return;
 		dressed = true;
 
-		if ( Rand.Int( 0, 3 ) != 1 )
+		if ( Rand.Int( 0, 3 ) != 10 )
 		{
 			var model = Rand.FromArray( new[]
 			{
-				"models/citizen_clothes/trousers/trousers.jeans.vmdl",
-				"models/citizen_clothes/dress/dress.kneelength.vmdl",
-				"models/citizen/clothes/trousers_tracksuit.vmdl",
-				"models/citizen_clothes/shoes/shorts.cargo.vmdl",
-				"models/citizen_clothes/trousers/trousers.lab.vmdl"
+				"models/citizen_clothes/trousers/trousers.police.vmdl",
+				"models/citizen_clothes/trousers/trousers.smart.vmdl",
+				"models/citizen_clothes/trousers/trousers.jeans.vmdl"
 			} );
 
 			pants = new ClothingEntity();
@@ -45,13 +43,13 @@ partial class HeistPlayer
 				jacket = pants;
 		}
 
-		if ( Rand.Int( 0, 3 ) != 1 && jacket == null )
+		if ( Rand.Int( 0, 3 ) != 10 && jacket == null )
 		{
 			var model = Rand.FromArray( new[]
 			{
-				"models/citizen_clothes/jacket/labcoat.vmdl",
 				"models/citizen_clothes/jacket/jacket.red.vmdl",
-				"models/citizen_clothes/gloves/gloves_workgloves.vmdl"
+				"models/citizen_clothes/jacket/jacket.tuxedo.vmdl",
+				"models/citizen_clothes/jacket/jacket_heavy.vmdl"
 			} );
 
 			jacket = new ClothingEntity();

@@ -220,7 +220,7 @@ public partial class NpcPawn : AnimEntity
 		ent.CopyBonesFrom( this );
 		ent.TakeDecalsFrom( this );
 		ent.SetRagdollVelocityFrom( this );
-		ent.DeleteAsync( 5f );
+		// ent.DeleteAsync( f );
 
 		// Copy the skin color
 		ent.SetMaterialGroup( GetMaterialGroup() );

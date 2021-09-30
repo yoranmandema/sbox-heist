@@ -8,7 +8,7 @@ partial class Shotgun : BaseHeistWeapon
 	public override float PrimaryRate => 1;
 	public override float SecondaryRate => 1;
 	public override AmmoType AmmoType => AmmoType.Buckshot;
-	public override int ClipSize => 8;
+	public override int ClipSize => 4;
 	public override float ReloadTime => 0.5f;
 	public override int Bucket => 2;
 	public override int HoldType => 2;
@@ -27,33 +27,9 @@ partial class Shotgun : BaseHeistWeapon
 		(ViewModelEntity as HeistViewModel).AimOffset = new Vector3( -4f, 18.9f, 2.8f );
 	}
 
-	public override void AttackPrimary() 
-	{
-		TimeSincePrimaryAttack = 0;
-		TimeSinceSecondaryAttack = 0;
+	public override FiringParams FiringParams => new FiringParams( 12f, 4f, 0f, 800f, 0.15f, 0.07f, 0.05f, 10, 0.3f );
 
-		if ( !TakeAmmo( 1 ) )
-		{
-			DryFire();
-			return;
-		}
-
-		(Owner as AnimEntity).SetAnimBool( "b_attack", true );
-
-		//
-		// Tell the clients to play the shoot effects
-		//
-		ShootEffects();
-		PlaySound( "rust_pumpshotgun.shoot" );
-
-		//
-		// Shoot the bullets
-		//
-		for ( int i = 0; i < 10; i++ )
-		{
-			ShootBullet( 0.2f, 0.4f, 12.0f, 3.0f );
-		}
-	}
+	public override string FiringSound => "rust_pumpshotgun.shoot";
 
 	public override void AttackSecondary()
 	{

@@ -10,8 +10,12 @@ using System.Threading.Tasks;
 public struct FiringParams
 {
 	public float Damage;
+	public float DamageMin;
 	public float Force;
 	public float HullSize;
+
+	public float RangeMin;
+	public float RangeMax;
 
 	// Amount of shots made
 	public int TraceCount;
@@ -28,9 +32,12 @@ public struct FiringParams
 	public float SpreadMultCrouch;
 	public float SpreadMultJump;
 
-	public FiringParams(float damage, float imprecision = 0.015f, float spreadhip = 0.05f, float spreadmove = 0.035f, int tracecount = 1, float hullsize = 0)
+	public FiringParams(float damage, float damagemin, float rangemin, float rangemax, float imprecision = 0.015f, float spreadhip = 0.05f, float spreadmove = 0.035f, int tracecount = 1, float hullsize = 0)
 	{
 		Damage = damage;
+		DamageMin = damagemin;
+		RangeMin = rangemin;
+		RangeMax = rangemax;
 		Force = (damage / 8).Clamp( 0, 2 );
 		TraceCount = tracecount;
 		Imprecision = imprecision;
@@ -57,7 +64,7 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 
 	public virtual bool AllowAim => true;
 
-	public virtual FiringParams FiringParams => new FiringParams(10);
+	public virtual FiringParams FiringParams => new FiringParams(15, 5, 200, 1000);
 
 	public virtual string FiringSound => "";
 
@@ -331,7 +338,7 @@ partial class BaseHeistWeapon : BaseWeapon, IRespawnableEntity
 
 				using ( Prediction.Off() )
 				{
-					var damageInfo = DamageInfo.FromBullet( tr.EndPos, dir * 100 * fparam.Force, fparam.Damage)
+					var damageInfo = DamageInfo.FromBullet( tr.EndPos, dir * 100 * fparam.Force, fparam.Damage + (fparam.Damage - fparam.DamageMin) * (1 - (Math.Max(0, (tr.Distance - fparam.RangeMin)) / (fparam.RangeMax - fparam.RangeMin))))
 						.UsingTraceResult( tr )
 						.WithAttacker( Owner )
 						.WithWeapon( this );

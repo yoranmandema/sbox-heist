@@ -139,7 +139,7 @@ class NpcGunner : NpcPawn
 	protected float WeaponSemiVariance = 0.5f;
 
 	protected float PatrolSpeed = 40f;
-	protected float CombatSpeed = 120f;
+	protected float CombatSpeed = 100f;
 
 	// The distance within which we try to back off
 	protected float MinCombatDistance = 80f;
@@ -155,6 +155,14 @@ class NpcGunner : NpcPawn
 	TimeSince TimeSinceScan;
 	TimeSince TimeSinceAttack;
 	bool LastVisCheck;
+
+	public Sandbox.Nav.Patrol Patrol;
+
+	// Builds up to 1 when seeing a target calm before attacking
+	protected float Suspicion = 0f;
+
+	// Builds up to 1 when shot or shooting
+	protected float Suppression = 0f;
 
 	public NpcTargetInfo Target;
 	public Dictionary<Entity, NpcTargetInfo> TargetList;
@@ -226,6 +234,7 @@ class NpcGunner : NpcPawn
 
 			{ new NpcStateTransition(NpcState.Idle, NpcEvent.GetTarget), NpcState.Engage },
 			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.GetTarget), NpcState.Engage },
+			{ new NpcStateTransition(NpcState.Search, NpcEvent.GetTarget), NpcState.Engage },
 
 			{ new NpcStateTransition(NpcState.Engage, NpcEvent.PushTarget), NpcState.Push },
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.PushTarget), NpcState.Push },
@@ -233,6 +242,7 @@ class NpcGunner : NpcPawn
 			{ new NpcStateTransition(NpcState.Idle, NpcEvent.SeekTarget), NpcState.Search },
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.SeekTarget), NpcState.Search }, // a new unknown target might override our current one
 			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.SeekTarget), NpcState.Search },
+			{ new NpcStateTransition(NpcState.Engage, NpcEvent.SeekTarget), NpcState.Search },
 			{ new NpcStateTransition(NpcState.Push, NpcEvent.SeekTarget), NpcState.Search },
 
 			{ new NpcStateTransition(NpcState.Engage, NpcEvent.Disengage), NpcState.Patrol },
@@ -445,7 +455,16 @@ class NpcGunner : NpcPawn
 			Speed = PatrolSpeed;
 			Steer = null; // this will also stop the NPC when in idle or disabled state
 			if ( CurrentState == NpcState.Patrol )
-				Steer = new Sandbox.Nav.Wander(); // patrol normally
+			{
+				if ( Patrol != null)
+				{
+					Steer = Patrol;
+				} else
+				{
+					Steer = new Sandbox.Nav.Wander(); // patrol normally
+				}
+			}
+				
 		}
 	}
 
@@ -454,7 +473,9 @@ class NpcGunner : NpcPawn
 		var ent = HasTarget() ? Target.Target : default;
 		if ( CurrentState == NpcState.Push )
 		{
-			if ( !HasTarget() || TimeSinceTargetVisible >= 15f )
+			if ( !HasTarget() || ent.Health <= 0 )
+				FireEvent( NpcEvent.Disengage, ent );
+			else if ( !HasTarget() || TimeSinceTargetVisible >= 5f )
 			{
 				// Lost target, hunt them down
 				FireEvent( NpcEvent.SeekTarget, ent );
@@ -462,10 +483,11 @@ class NpcGunner : NpcPawn
 			}
 		} else if ( CurrentState == NpcState.Engage )
 		{
-			if ( !HasTarget() || TimeSinceTargetVisible >= 30f )
-			{
-				// Enter patrol state (we don't want to actively look for them) 
+			if ( !HasTarget() || ent.Health <= 0 )
 				FireEvent( NpcEvent.Disengage, ent );
+			else if ( !HasTarget() || TimeSinceTargetVisible >= 15f )
+			{
+				FireEvent( NpcEvent.SeekTarget, ent );
 				return;
 			} else if ( TimeSinceTargetVisible <= 2f && ent.Health <= Health * 0.4 )
 			{
@@ -487,7 +509,7 @@ class NpcGunner : NpcPawn
 				else if ( ent.Health <= Health * 0.75 )
 					FireEvent( NpcEvent.PushTarget, ent );
 				else
-					FireEvent( NpcEvent.SeekTarget, ent );
+					FireEvent( NpcEvent.GetTarget, ent );
 			}
 		}
 		else if ( CurrentState == NpcState.Idle )
@@ -554,8 +576,8 @@ class NpcGunner : NpcPawn
 		if ( targetEnmity >= 0 && target.Key != Target.Target )
 		{
 			var info = target.Value;
-			info.TimeSinceReappear = -0.5f; // Delay when switching targets
 			Target = info;
+			TimeSinceTargetReappear = -1f; // Delay when switching targets
 		}
 	}
 	protected virtual void ForgetTarget()
@@ -570,6 +592,7 @@ class NpcGunner : NpcPawn
 			if ( Target.Target == ent )
 				Target = default;
 		}
+		if ( TargetList.Count == 0 ) Suspicion = 0;
 	}
 	protected virtual void SetTarget( Entity ent )
 	{
@@ -577,11 +600,15 @@ class NpcGunner : NpcPawn
 		{
 			var info = new NpcTargetInfo( ent );
 			TargetList.Add( ent, info );
+			Target = info;
+		} else
+		{
+			Target = TargetList[ent];
 		}
 	}
 	protected virtual void SetUnknownTarget( Entity ent )
 	{
-		if ( ent != null && (!HasTarget() || Target.Target != ent) && !TargetList.ContainsKey( ent ) )
+		if ( ent != null && ent.IsValid() && (!HasTarget() || Target.Target != ent) && !TargetList.ContainsKey( ent ) )
 		{
 			var info = new NpcTargetInfo( ent );
 			info.TimeSinceVisible = -1f;
@@ -596,7 +623,7 @@ class NpcGunner : NpcPawn
 
 		var dist = (ent.Position - Position).Length;
 		var angdiff = EyeRot.Distance( Rotation.LookAt( ent.EyePos - EyePos, Vector3.Up ) );
-		if ( dist > (reducedVision ? 150f : 250f) && angdiff >= (reducedVision ? 75f : 100f) )
+		if ( dist > (reducedVision ? 64f : 96f) && angdiff >= (reducedVision ? 75f : 100f) )
 			return false;
 
 		var tr = Trace.Ray( EyePos, ent.EyePos )
@@ -659,6 +686,7 @@ class NpcGunner : NpcPawn
 		if ( !npc_gunner_vision ) return;
 		TimeSinceScan = 0;
 		var acquire = false;
+		Suspicion = Math.Max(Suspicion - 0.15f, 0);
 		foreach ( Entity ent in Physics.GetEntitiesInSphere( Position, 2000f ) )
 		{
 			if ( ent is Player && CheckVisibility( ent, true ) )
@@ -667,6 +695,15 @@ class NpcGunner : NpcPawn
 				{
 					var info = TargetList[ent];
 					info.TimeSinceVisible = 0;
+					info.TimeSinceReappear = 0;
+				}
+				else if (TargetList.Count == 0 && Suspicion < 1)
+				{
+					Suspicion += 1f
+						* ((1000f - ent.Position.Distance( Position )) / 1000f).Clamp(0.25f, 1)
+						* (1 - Math.Abs( EyeRot.Distance( Rotation.LookAt( ent.EyePos - EyePos, Vector3.Up ) )) / 75f).Clamp(0.25f, 1)
+						* (((PlayerController)(((Player)ent).Controller)).IsCrouching ? 0.5f : 1f);
+					Log.Info( Suspicion );
 				}
 				else
 				{
@@ -683,7 +720,7 @@ class NpcGunner : NpcPawn
 				}
 			}
 		}
-
+		if (Suspicion > 0) DebugOverlay.Text( Position + Vector3.Up * 32f, (Suspicion * 100f).CeilToInt().ToString(), 0.21f );
 	}
 
 	// --------------------------------------------------
@@ -714,7 +751,7 @@ class NpcGunner : NpcPawn
 	protected override void NpcThink()
 	{
 		var visible = CheckTargetVisiblity();
-		if (TimeSinceScan >= 1f) ScanForTargets();
+		if (TimeSinceScan >= 0.2f) ScanForTargets();
 
 		StateUpdate();
 
@@ -733,7 +770,7 @@ class NpcGunner : NpcPawn
 			if ( Weapon != null ) // we can fire right as they disappear for a second
 			{
 				var angdiff = Rotation.Distance( Rotation.LookAt( ent.Position - Position, Vector3.Up ) );
-				if (angdiff <= 15f && TimeSinceTargetReappear >= 0f && TimeSinceTargetVisible <= 1f &&
+				if (angdiff <= 15f && TimeSinceTargetReappear >= 0.5f && TimeSinceTargetVisible <= 1f &&
 						Weapon.CanPrimaryAttack() && ( Weapon.Automatic || TimeSinceAttack > ( 1 / WeaponSemiRate ) ) )
 				{
 					Weapon.AttackPrimary();
@@ -781,7 +818,7 @@ class NpcGunner : NpcPawn
 			EyeRot += (Rotation - lastRot); // when our body rotates, so do our eyes
 
 			var tgt = Rotation.LookAt( vec, Vector3.Up );
-			if (TimeSinceTargetVisible >= 3f)
+			if (Target.TimeSinceVisible >= 3f)
 			{
 				// Add some head movement since we're looking around for the target
 				tgt += Rotation.FromYaw( Rotation.Yaw() + MathF.Sin( Time.Now * 2f ) * 75f );
@@ -789,8 +826,8 @@ class NpcGunner : NpcPawn
 			else
 			{
 				// Add sway to imitate inperfect aim, otherwise we're just an aimbot!
-				tgt.x += MathF.Sin( Time.Now / 2f ) * Time.Delta * 0.5f;
-				tgt.y += MathF.Cos( Time.Now / 2f ) * Time.Delta * 0.25f;
+				tgt.x += MathF.Sin( Time.Now / 2f ) * Time.Delta * 0.8f;
+				tgt.y += MathF.Cos( Time.Now / 2f ) * Time.Delta * 0.4f;
 
 				// Slow down when aiming towards far away targets. this gives the player some opportunity to dodge
 				eyeRotSpeed *= (1 - 0.5f * Math.Clamp( vec.Length / 1000f, 0f, 1f ));
@@ -870,7 +907,7 @@ class NpcGunner : NpcPawn
 		if ( CurrentState == NpcState.Idle || CurrentState == NpcState.Patrol )
 		{
 			// sneak attack!
-			info.Damage = info.Damage * 2;
+			info.Damage = info.Damage * 3;
 		}
 
 		base.TakeDamage( info );
