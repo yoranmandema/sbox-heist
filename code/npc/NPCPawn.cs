@@ -109,13 +109,13 @@ public partial class NpcPawn : AnimEntity
 
 		NpcThink();
 
-		using var _a = Sandbox.Debug.Profile.Scope( "NpcTest::Tick" );
+		//using var _a = Sandbox.Debug.Profile.Scope( "NpcTest::Tick" );
 
 		InputVelocity = 0;
 
 		if ( Steer != null )
 		{
-			using var _b = Sandbox.Debug.Profile.Scope( "Steer" );
+			//using var _b = Sandbox.Debug.Profile.Scope( "Steer" );
 
 			Steer.Tick( Position );
 
@@ -131,10 +131,10 @@ public partial class NpcPawn : AnimEntity
 			}
 		}
 
-		using ( Sandbox.Debug.Profile.Scope( "Move" ) )
-		{
+		//using ( Sandbox.Debug.Profile.Scope( "Move" ) )
+		//{
 			Move( Time.Delta );
-		}
+		//}
 
 		NpcTurn();
 		NpcAnim();
@@ -156,15 +156,15 @@ public partial class NpcPawn : AnimEntity
 			//						.IgnoreDepth()
 			//						.Arrow( Position, Position + Velocity * 2, Vector3.Up, 2.0f );
 
-			using ( Sandbox.Debug.Profile.Scope( "TryUnstuck" ) )
+			// using ( Sandbox.Debug.Profile.Scope( "TryUnstuck" ) )
 				move.TryUnstuck();
 
-			using ( Sandbox.Debug.Profile.Scope( "TryMoveWithStep" ) )
+			// using ( Sandbox.Debug.Profile.Scope( "TryMoveWithStep" ) )
 				move.TryMoveWithStep( timeDelta, 30 );
 		}
 
-		using ( Sandbox.Debug.Profile.Scope( "Ground Checks" ) )
-		{
+		//using ( Sandbox.Debug.Profile.Scope( "Ground Checks" ) )
+		//{
 			var tr = move.TraceDirection( Vector3.Down * 10.0f );
 
 			if ( move.IsFloor( tr ) )
@@ -195,7 +195,7 @@ public partial class NpcPawn : AnimEntity
 				move.Velocity += Vector3.Down * 900 * timeDelta;
 				Sandbox.Debug.Draw.Once.WithColor( Color.Red ).Circle( Position, Vector3.Up, 10.0f );
 			}
-		}
+		//}
 
 		Position = move.Position;
 		Velocity = move.Velocity;

@@ -30,8 +30,9 @@ partial class HeistPlayer : Player
 		EnableHideInFirstPerson = true;
 		EnableShadowInFirstPerson = true;
 
-		Dress();
+		//Dress();
 		ClearAmmo();
+		Clothing.DressEntity( this );
 
 		SupressPickupNotices = true;
 
@@ -70,6 +71,11 @@ partial class HeistPlayer : Player
 
 		EnableAllCollisions = false;
 		EnableDrawing = false;
+
+		foreach ( var child in Children.OfType<ModelEntity>() )
+		{
+			child.EnableDrawing = false;
+		}
 	}
 
 

@@ -18,7 +18,7 @@ class GuardManager
 		{
 			var point = NpcPoint.All[Rand.Int( 0, NpcPoint.All.Count - 1 )];
 			var pos = NavMesh.GetPointWithinRadius( point.GetPosition(), 0, 128f );
-			var pos2 = NavMesh.GetPointWithinRadius( point.GetPosition(), 128f, 512f );
+			var pos2 = NavMesh.GetPointWithinRadius( point.GetPosition(), 128f, 1024f );
 			if (pos.HasValue && pos2.HasValue)
 			{
 				var pawn = new NpcGunner

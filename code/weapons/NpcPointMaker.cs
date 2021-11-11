@@ -80,15 +80,6 @@ partial class NpcPointMaker : BaseHeistWeapon
 	public override void Simulate( Client owner )
 	{
 		base.Simulate(owner);
-
-		if ( NpcPoint.heist_navpoints_draw > 0 )
-		{
-			var arr = NpcPoint.All;
-			foreach ( var p in arr )
-			{
-				p.DebugDraw( 0.1f, 0.2f );
-			}
-		}
 	}
 
 	[ClientRpc]

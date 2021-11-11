@@ -11,6 +11,8 @@ enum NpcState
 	Idle, // stand still, look around
 	Patrol, // wander randomly or around a position
 
+	Shock, // aim at target. if target shoots, engage; if target not visible, alarm
+	Alarm, // attempting to raise alarm
 	Search, // approach last known position of target
 	Engage, // keep medium range
 	Push, // close up range
@@ -23,7 +25,10 @@ enum NpcEvent
 	ResumePatrol, // idle -> patrol
 	PausePatrol, // patrol -> idle
 
-	GetTarget, // idle/patrol -> engage
+	EnterShock, // idle/patrol -> shock
+	SoundAlarm, // idle/patrol/shock -> alarm
+
+	GetTarget, // idle/patrol/shock/alarm -> engage
 	PushTarget, // engage/search -> push
 	SeekTarget, // push/patrol/search -> search
 	Disengage, // engage/push/search -> patrol
@@ -154,12 +159,14 @@ class NpcGunner : NpcPawn
 	TimeSince TimeSinceVisCheck;
 	TimeSince TimeSinceScan;
 	TimeSince TimeSinceAttack;
+	TimeSince TimeSinceState;
 	bool LastVisCheck;
 
 	public Sandbox.Nav.Patrol Patrol;
 
 	// Builds up to 1 when seeing a target calm before attacking
 	protected float Suspicion = 0f;
+	bool Cool = true;
 
 	// Builds up to 1 when shot or shooting
 	protected float Suppression = 0f;
@@ -192,7 +199,7 @@ class NpcGunner : NpcPawn
 		{
 			if ( Target.IsValid() )
 				return Target.TimeSinceVisible;
-			return 0f;
+			return int.MaxValue;
 		}
 		protected set
 		{
@@ -232,9 +239,18 @@ class NpcGunner : NpcPawn
 			{ new NpcStateTransition(NpcState.Idle, NpcEvent.ResumePatrol), NpcState.Patrol },
 			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.PausePatrol), NpcState.Idle },
 
+			{ new NpcStateTransition(NpcState.Idle, NpcEvent.EnterShock), NpcState.Shock },
+			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.EnterShock), NpcState.Shock },
+
+			{ new NpcStateTransition(NpcState.Idle, NpcEvent.SoundAlarm), NpcState.Alarm },
+			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.SoundAlarm), NpcState.Alarm },
+			{ new NpcStateTransition(NpcState.Shock, NpcEvent.SoundAlarm), NpcState.Alarm },
+
 			{ new NpcStateTransition(NpcState.Idle, NpcEvent.GetTarget), NpcState.Engage },
 			{ new NpcStateTransition(NpcState.Patrol, NpcEvent.GetTarget), NpcState.Engage },
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.GetTarget), NpcState.Engage },
+			{ new NpcStateTransition(NpcState.Shock, NpcEvent.GetTarget), NpcState.Engage },
+			{ new NpcStateTransition(NpcState.Alarm, NpcEvent.GetTarget), NpcState.Engage },
 
 			{ new NpcStateTransition(NpcState.Engage, NpcEvent.PushTarget), NpcState.Push },
 			{ new NpcStateTransition(NpcState.Search, NpcEvent.PushTarget), NpcState.Push },
@@ -273,13 +289,14 @@ class NpcGunner : NpcPawn
 		if ( !transitions.TryGetValue( transition, out nextState ) )
 		{
 			// throw new Exception( "Invalid transition: " + CurrentState + " -> " + command );
-			Log.Warning( "Invalid transition: " + CurrentState + " -> " + command );
+			Log.Warning( ToString() + ": Invalid transition (" + CurrentState + " -> " + command + ")" );
 			return CurrentState;
 		}
 		return nextState;
 	}
 	public virtual NpcState FireEvent( NpcEvent command, Entity obj )
 	{
+		TimeSinceState = 0;
 		// Handle disable uniquely, since any state can go into it
 		if ( command == NpcEvent.Disable )
 		{
@@ -294,6 +311,7 @@ class NpcGunner : NpcPawn
 			CurrentState = newState;
 			eventFunc[command]?.Invoke( obj );
 		}
+		// Log.Info( ToString() + ": FireEvent(" + command.ToString() + "): state = " + CurrentState );
 		return CurrentState;
 	}
 
@@ -301,7 +319,46 @@ class NpcGunner : NpcPawn
 	{
 		TimeSincePathThink = 0;
 
-		if ( HasTarget() )
+		if ( CurrentState == NpcState.Search )
+		{
+			// We lost track of the target
+			Speed = (CombatSpeed + PatrolSpeed) / 2;
+			if ( LastTargetPosition != Vector3.Zero )
+			{
+				var tr = Trace.Ray( EyePos, LastTargetPosition )
+					.Ignore( Owner )
+					.Ignore( this )
+					.Run();
+				if ( tr.Fraction >= 0.95 )
+					LastTargetPosition = Vector3.Zero;
+			}
+
+			Vector3? pos;
+
+			if ( LastTargetPosition == Vector3.Zero )
+			{
+				// We can see the last known position. Let's look around instead
+				pos = NavMesh.GetPointWithinRadius( Position, 200f, 400f );
+			}
+			else if ( TimeSinceTargetVisible < 0 )
+			{
+				// We need to investigate the last known position directly and now
+				pos = LastTargetPosition;
+			}
+			else
+			{
+				// Approach last known position
+				pos = NavMesh.GetPointWithinRadius( LastTargetPosition, 100f, 200f );
+			}
+
+			Steer = new NavSteer();
+			if ( !pos.HasValue )
+				Steer.Target = LastTargetPosition;
+			else
+				Steer.Target = (Vector3)pos;
+
+		}
+		else if( HasTarget() )
 		{
 			var ent = Target.Target;
 			// If we've seen our target recently, we know where they are;
@@ -411,44 +468,6 @@ class NpcGunner : NpcPawn
 				else
 					Steer.Target = (Vector3)pos;
 
-			} else if ( CurrentState == NpcState.Search )
-			{
-				// We lost track of the target.
-				Speed = (CombatSpeed + PatrolSpeed) / 2;
-				if ( LastTargetPosition != Vector3.Zero )
-				{
-					var tr = Trace.Ray( EyePos, tgtpos )
-						.Ignore( Owner )
-						.Ignore( this )
-						.Run();
-					if ( tr.Fraction >= 0.9 )
-						LastTargetPosition = Vector3.Zero;
-				}
-
-				Vector3? pos;
-				
-				if ( LastTargetPosition == Vector3.Zero )
-				{
-					// We can see the last known position. Let's look around instead
-					pos = NavMesh.GetPointWithinRadius( Position, 200f, 400f );
-				}
-				else if ( TimeSinceTargetVisible < 0 )
-				{
-					// We need to investigate the last known position directly and now
-					pos = LastTargetPosition;
-				}
-				else
-				{
-					// Approach last known position
-					pos = NavMesh.GetPointWithinRadius( tgtpos, 100f, 200f );
-				}
-
-				Steer = new NavSteer();
-				if ( !pos.HasValue )
-					Steer.Target = tgtpos;
-				else
-					Steer.Target = (Vector3)pos;
-
 			}
 		} else
 		{
@@ -485,7 +504,7 @@ class NpcGunner : NpcPawn
 		{
 			if ( !HasTarget() || ent.Health <= 0 )
 				FireEvent( NpcEvent.Disengage, ent );
-			else if ( !HasTarget() || TimeSinceTargetVisible >= 15f )
+			else if ( !HasTarget() || TimeSinceTargetVisible >= 10f )
 			{
 				FireEvent( NpcEvent.SeekTarget, ent );
 				return;
@@ -497,7 +516,7 @@ class NpcGunner : NpcPawn
 		}
 		else if ( CurrentState == NpcState.Search )
 		{
-			if ( TimeSinceTargetVisible >= 90f )
+			if ( TimeSinceState >= 30f )
 			{
 				// Give up hunting
 				FireEvent( NpcEvent.Disengage, ent );
@@ -518,7 +537,7 @@ class NpcGunner : NpcPawn
             {
 				FireEvent( NpcEvent.GetTarget, Target.Target );
 			}
-			else if ( !npc_gunner_nopatrol && TimeSincePathThink > 10f )
+			else if ( !npc_gunner_nopatrol )
 			{
 				// Let's start patrolling!
 				FireEvent( NpcEvent.ResumePatrol, null );
@@ -531,14 +550,9 @@ class NpcGunner : NpcPawn
 			{
 				FireEvent( NpcEvent.GetTarget, Target.Target );
 			}
-			else if( TimeSincePathThink > 30f )
-			{
-				// Let's stop for a bit
-				FireEvent( NpcEvent.PausePatrol, null );
-				return;
-			}
 		}
-		DebugOverlay.ScreenText( ToString() + " " + CurrentState.ToString() + " " + Target.ToString() );
+		DebugOverlay.Text( Position + Vector3.Up * 72f, CurrentState.ToString() );
+		// DebugOverlay.ScreenText( ToString() + " " + CurrentState.ToString() + " " + Target.ToString() );
 	}
 
 	// --------------------------------------------------
@@ -605,14 +619,16 @@ class NpcGunner : NpcPawn
 		{
 			Target = TargetList[ent];
 		}
+		Cool = false;
 	}
 	protected virtual void SetUnknownTarget( Entity ent )
 	{
 		if ( ent != null && ent.IsValid() && (!HasTarget() || Target.Target != ent) && !TargetList.ContainsKey( ent ) )
 		{
 			var info = new NpcTargetInfo( ent );
-			info.TimeSinceVisible = -1f;
+			info.TimeSinceVisible = 1f;
 			info.TimeSinceReappear = -1f;
+			info.LastPosition = ent.Position + Vector3.Random.WithZ( 0 ) * 128f;
 			TargetList.Add( ent, info );
 		}
 	}
@@ -638,6 +654,8 @@ class NpcGunner : NpcPawn
 	}
 	protected virtual bool CheckTargetVisiblity()
 	{
+		if ( Cool && Suspicion < 1f ) return false;
+
 		// TODO: maybe this can trigger less often for performance?
 		if ( TimeSinceVisCheck == 0 ) return LastVisCheck;
 		LastVisCheck = false;
@@ -646,7 +664,7 @@ class NpcGunner : NpcPawn
 		var bestEnmity = HasTarget() ? CalculateEnmity( Target ) : -1;
 		var bestTimeSince = 0f;
 
-		using ( Sandbox.Debug.Profile.Scope( "Gunner Visibility" ) )
+		if ( npc_gunner_vision )
 		{
 			foreach ( KeyValuePair<Entity, NpcTargetInfo> pair in TargetList )
 			{
@@ -691,19 +709,18 @@ class NpcGunner : NpcPawn
 		{
 			if ( ent is Player && CheckVisibility( ent, true ) )
 			{
-				if ( TargetList.ContainsKey( ent ) )
+				if ( !Cool && TargetList.ContainsKey( ent ) )
 				{
 					var info = TargetList[ent];
 					info.TimeSinceVisible = 0;
 					info.TimeSinceReappear = 0;
 				}
-				else if (TargetList.Count == 0 && Suspicion < 1)
+				else if (Cool && Suspicion < 1)
 				{
-					Suspicion += 1f
+					Suspicion += 0.5f
 						* ((1000f - ent.Position.Distance( Position )) / 1000f).Clamp(0.25f, 1)
 						* (1 - Math.Abs( EyeRot.Distance( Rotation.LookAt( ent.EyePos - EyePos, Vector3.Up ) )) / 75f).Clamp(0.25f, 1)
 						* (((PlayerController)(((Player)ent).Controller)).IsCrouching ? 0.5f : 1f);
-					Log.Info( Suspicion );
 				}
 				else
 				{
@@ -720,7 +737,7 @@ class NpcGunner : NpcPawn
 				}
 			}
 		}
-		if (Suspicion > 0) DebugOverlay.Text( Position + Vector3.Up * 32f, (Suspicion * 100f).CeilToInt().ToString(), 0.21f );
+		if (Cool && Suspicion > 0) DebugOverlay.Text( Position + Vector3.Up * 32f, (Suspicion * 100f).CeilToInt().ToString(), 0.25f );
 	}
 
 	// --------------------------------------------------
@@ -757,7 +774,7 @@ class NpcGunner : NpcPawn
 
 		var ent = Target.Target;
 
-		if ( HasTarget() && TimeSincePathThink > 3f )
+		if ( TimeSincePathThink > 3f )
 		{
 			SteerUpdate();
 		}
@@ -919,12 +936,6 @@ class NpcGunner : NpcPawn
 		{
 			var targetInfo = TargetList[attacker];
 			targetInfo.Enmity += info.Damage;
-			targetInfo.LastPosition = attacker.Position; // attacking reveals position. kind of unfair?
-		} else
-		{
-			var targetInfo = new NpcTargetInfo( attacker );
-			targetInfo.Enmity = info.Damage;
-			TargetList.Add( attacker, targetInfo );
 		}
 		if (CurrentState == NpcState.Idle || CurrentState == NpcState.Patrol || CurrentState == NpcState.Search)
 		{

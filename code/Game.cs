@@ -2,6 +2,14 @@
 using System;
 using System.Linq;
 
+enum HeistGameState
+{
+	Waiting,
+	Pregame,
+	Active,
+	Postgame
+}
+
 /// <summary>
 /// This is the heart of the gamemode. It's responsible
 /// for creating the player and stuff.
@@ -9,26 +17,22 @@ using System.Linq;
 [Library( "heist", Title = "Heist" )]
 partial class HeistGame : Game
 {
+	public static HeistGameState GameState { get; protected set; }
+
 	public HeistGame()
 	{
-		//
-		// Create the HUD entity. This is always broadcast to all clients
-		// and will create the UI panels clientside. It's accessible 
-		// globally via Hud.Current, so we don't need to store it.
-		//
 		if ( IsServer )
 		{
 			new HeistHud();
 		}
 
-		
+		GameState = HeistGameState.Waiting;
 	}
 
 	public override void PostLevelLoaded()
 	{
 		base.PostLevelLoaded();
-
-		ItemRespawn.Init();
+		NpcPoint.LoadFromFile();
 	}
 
 	public override void ClientJoined( Client cl )
@@ -36,8 +40,16 @@ partial class HeistGame : Game
 		base.ClientJoined( cl );
 
 		var player = new HeistPlayer();
+		player.UpdateClothes( cl );
 		player.Respawn();
 
 		cl.Pawn = player;
+	}
+
+	public override void Simulate( Client cl )
+	{
+		base.Simulate( cl );
+
+		NpcPoint.DrawPoints();
 	}
 }

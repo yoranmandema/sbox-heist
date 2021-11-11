@@ -28,20 +28,16 @@ partial class HeistPlayer
 		ent.SetRagdollVelocityFrom( this );
 		ent.DeleteAsync( 20.0f );
 
-		// Copy the skin color
-		ent.SetMaterialGroup( GetMaterialGroup() );
-
 		// Copy the clothes over
 		foreach ( var child in Children )
 		{
+			if ( !child.Tags.Has( "clothes" ) )
+				continue;
+
 			if ( child is ModelEntity e )
 			{
-				var model = e.GetModelName();
-				if ( model != null && !model.Contains( "clothes" ) ) // Uck we 're better than this, entity tags, entity type or something?
-					continue;
-
 				var clothing = new ModelEntity();
-				clothing.SetModel( model );
+				clothing.SetModel( e.GetModel() );
 				clothing.SetParent( ent, true );
 			}
 		}

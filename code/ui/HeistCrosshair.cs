@@ -6,15 +6,14 @@ using System;
 
 public class HeistCrosshair : StandardCrosshair
 {
-	// Following code is based on old crosshair behavior. TODO: write new crosshairs
-	/*
 	int fireCounter;
 
 	public HeistCrosshair()
 	{
-		StyleSheet.Load( "/ui/HeistCrosshair.scss" );
 
-		for( int i=0; i<5; i++ )
+		// StyleSheet.Load( "/ui/HeistCrosshair.scss" );
+
+		for ( int i = 0; i < 5; i++ )
 		{
 			var p = Add.Panel( "element" );
 			p.AddClass( $"el{i}" );
@@ -32,15 +31,9 @@ public class HeistCrosshair : StandardCrosshair
 			fireCounter--;
 	}
 
-	public override void OnEvent( string eventName )
+	[PanelEvent]
+	public void FireEvent()
 	{
-		if ( eventName == "fire" )
-		{
-			// this is a hack until we have animation or TriggerClass support
-			fireCounter += 2;
-		}
-
-		base.OnEvent( eventName );
+		fireCounter += 2;
 	}
-	*/
 }

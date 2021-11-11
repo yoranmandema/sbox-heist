@@ -20,6 +20,8 @@ namespace Sandbox.Nav
 		public override void Tick( Vector3 position )
 		{
 
+			Path.DebugDraw( 0.1f, 0.1f );
+
 			if ( !PatrolPaused )
 				base.Tick(position);
 
@@ -50,6 +52,26 @@ namespace Sandbox.Nav
 						Target = t.Value;
 				}
 			}
+
+			/*
+			var draw = Sandbox.Debug.Draw.ForSeconds( 0.1f );
+			var lift = Vector3.Up * 2;
+			draw.WithColor( Color.White.WithAlpha( 0.1f ) ).Circle( lift + PatrolStart, Vector3.Up, 20.0f );
+			draw.WithColor( Color.White.WithAlpha( 0.1f ) ).Circle( lift + PatrolEnd, Vector3.Up, 20.0f );
+
+			int i = 0;
+			var lastPoint = Vector3.Zero;
+			foreach ( var point in this.Path.Points )
+			{
+				if ( i > 0 )
+				{
+					draw.WithColor( i == 1 ? Color.Green.WithAlpha( 0.1f ) : Color.Cyan.WithAlpha( 0.1f ) ).Arrow( lastPoint + lift, point + lift, Vector3.Up, 5.0f );
+				}
+
+				lastPoint = point;
+				i++;
+			}
+			*/
 		}
 	}
 

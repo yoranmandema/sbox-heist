@@ -183,4 +183,16 @@ public class NpcPoint
 			Log.Info( "No saved nav points exist." );
 		}
 	}
+
+	public static void DrawPoints()
+	{
+		if ( heist_navpoints_draw > 0 )
+		{
+			var arr = All;
+			foreach ( var p in arr )
+			{
+				p.DebugDraw( 0.1f, 0.2f );
+			}
+		}
+	}
 }
