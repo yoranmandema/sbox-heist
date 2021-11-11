@@ -12,7 +12,6 @@ public partial class PickupFeed : Panel
 	public PickupFeed()
 	{
 		Current = this;
-		StyleSheet.Load( "/ui/PickupFeed.scss" );
 	}
 
 	/// <summary>
@@ -24,7 +23,7 @@ public partial class PickupFeed : Panel
 		// TODO - icons for weapons?
 		// TOPO - icons for ammo?
 
-		Current?.AddEntry( $"\n{text}" );		
+		Current?.AddEntry( $"\n{text}" );
 	}
 
 	/// <summary>
